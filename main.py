@@ -368,7 +368,7 @@ def now_ir() -> datetime:
 def generate_vless_link(
     uuid: str,
     host: str,
-    remark: str = BRAND,
+    remark: str = "",
     protocol: str = DEFAULT_PROTOCOL,
     fingerprint: str | None = None,
     alpn: str | None = None,
@@ -419,7 +419,7 @@ def vless_link_for_link(link: dict, uid: str, host: str) -> str:
     proto = link.get("protocol", DEFAULT_PROTOCOL)
     return generate_vless_link(
         uid, host,
-        remark=f"{BRAND}-{link.get('label','')}",
+        remark=str(link.get("label") or "").strip(),
         protocol=proto,
         fingerprint=link.get("fingerprint"),
         alpn=link.get("alpn"),
