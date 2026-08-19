@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.9"
+VERSION = "9.14"
 
 logger = logging.getLogger(BRAND)
 
@@ -78,6 +78,26 @@ CONFIG = {
         # پایش و در صورت مسدودی خودکار به دامنهٔ سالم لیست سفید سوئیچ می‌شوند.
         "default_sni": os.environ.get("AUTO_FAILOVER_SNI", "").strip(),
     },
+    # ⚛️ موتور مسیریابی چندگانه کوانتومی (Quantum MultiPath Engine از Nyx v2.3.0):
+    # هر N ثانیه (پیش‌فرض ۱۵) چهار مسیر ارتباطی مستقل (TLS مستقیم، CDN داخلی،
+    # تونل DNS پورت ۵۳ و پینگ ICMP) به‌صورت موازی تست می‌شوند؛ بهترین مسیر
+    # انتخاب و در قطعی کامل، حالت اضطراری (Panic Mode) با اعلان تلگرام فعال می‌شود.
+    # لودبالانسر هوشمند هم هر lb_interval ثانیه کانفیگ‌ها را نمره‌دهی می‌کند تا
+    # سالم‌ترین سرور همیشه در ردیف اول سابسکریپشن قرار بگیرد.
+    "multipath": {
+        "enabled": os.environ.get("MULTIPATH_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+        "interval": max(5, int(os.environ.get("MULTIPATH_INTERVAL", "15") or 15)),
+        "lb_enabled": os.environ.get("LOAD_BALANCER_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+        "lb_interval": max(10, int(os.environ.get("LOAD_BALANCER_INTERVAL", "30") or 30)),
+        "panic_alerts": os.environ.get("PANIC_ALERTS_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+    },
+    # 🎨 شخصی‌سازی صفحه ساب مشتری (Sub Portal Custom Branding از Nyx):
+    # نام برند، لوگو، رنگ، دکمه‌های پشتیبانی/تمدید، کادر اعلان و باکس دانلود اپ‌ها.
+    "branding": {},
+    # 💾 بکاپ خودکار دیتابیس در تلگرام + بازیابی ۱-کلیک (از Nyx)
+    "backup": {},
+    # 🌐 خروجی کلودفلر WARP برای رفع تحریم OpenAI/Netflix و مخفی‌سازی IP سرور (از Nyx)
+    "warp": {},
 }
 
 app.add_middleware(
@@ -120,6 +140,28 @@ async def load_state():
                         pass
                 if "default_sni" in af:
                     cur["default_sni"] = str(af["default_sni"] or "").strip()
+            br = data.get("branding")
+            if isinstance(br, dict):
+                CONFIG["branding"] = br
+            for _key in ("backup", "warp"):
+                if isinstance(data.get(_key), dict):
+                    CONFIG.setdefault(_key, {}).update(data[_key])
+            mp = data.get("multipath")
+            if isinstance(mp, dict):
+                cur_mp = CONFIG.setdefault("multipath", {})
+                for flag in ("enabled", "lb_enabled", "panic_alerts"):
+                    if flag in mp:
+                        cur_mp[flag] = bool(mp[flag])
+                if "interval" in mp:
+                    try:
+                        cur_mp["interval"] = max(5, int(mp["interval"]))
+                    except (TypeError, ValueError):
+                        pass
+                if "lb_interval" in mp:
+                    try:
+                        cur_mp["lb_interval"] = max(10, int(mp["lb_interval"]))
+                    except (TypeError, ValueError):
+                        pass
             logger.info(f"State loaded: {len(LINKS)} links, {len(SUBS)} subs")
     except Exception as e:
         logger.warning(f"Could not load state: {e}")
@@ -137,6 +179,10 @@ async def save_state():
                 "password_hash": AUTH["password_hash"],
                 "cdn_domain": CONFIG.get("cdn_domain", ""),
                 "auto_failover": dict(CONFIG.get("auto_failover", {})),
+                "multipath": dict(CONFIG.get("multipath", {})),
+                "branding": dict(CONFIG.get("branding", {})),
+                "backup": dict(CONFIG.get("backup", {})),
+                "warp": dict(CONFIG.get("warp", {})),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -170,8 +216,21 @@ MASTER: dict = {}
 MASTER_LOCK = asyncio.Lock()
 _heartbeat_task: asyncio.Task | None = None
 
-# پروتکل‌های پشتیبانی‌شده برای هر کانفیگ
-PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one")
+# پروتکل‌های پشتیبانی‌شده برای هر کانفیگ (VLESS/WS، سه مد XHTTP و Trojan/WS)
+from protocols import (
+    ALL_PROTOCOLS as PROTOCOLS,
+    DEFAULT_FRAGMENT_PRESET,
+    FRAGMENT_PACKET_MODES,
+    FRAGMENT_PRESETS,
+    PROTOCOL_LABELS,
+    build_trojan_link,
+    fragment_query_value,
+    fragment_summary_fa,
+    is_trojan,
+    normalize_fragment,
+    trojan_password,
+)
+
 DEFAULT_PROTOCOL = "vless-ws"
 
 # Fingerprint (uTLS) های قابل انتخاب برای هر کانفیگ
@@ -184,6 +243,7 @@ DEFAULT_ALPN_BY_PROTOCOL = {
     "xhttp-packet-up": "h2,http/1.1",
     "xhttp-stream-up": "h2,http/1.1",
     "xhttp-stream-one": "h2,http/1.1",
+    "trojan-ws": "http/1.1",
 }
 DEFAULT_PORT = 443
 MIN_PORT, MAX_PORT = 1, 65535
@@ -359,6 +419,10 @@ async def startup():
     _heartbeat_task = asyncio.create_task(_master_heartbeat_loop())
     # دیمون سوئیچ خودکار SNI (Smart Auto-Failover از Nyx Panel)
     auto_failover_manager.apply_settings()
+    # ⚛️ موتور مسیریابی چندگانه + حالت اضطراری + لودبالانسر هوشمند (Nyx v2.3.0)
+    multipath_start_all()
+    # 💾 دیمون بکاپ خودکار تلگرام
+    backup_manager.apply_settings()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"{BRAND} v{VERSION} started on port {CONFIG['port']} (node mode)")
 
@@ -366,6 +430,8 @@ async def startup():
 async def shutdown():
     global _heartbeat_task
     auto_failover_manager.stop()
+    multipath_stop_all()
+    backup_manager.stop()
     if _heartbeat_task:
         _heartbeat_task.cancel()
         try:
@@ -439,6 +505,7 @@ def generate_vless_link(
     alpn: str | None = None,
     port: int | None = None,
     sni: str | None = None,
+    fragment: dict | None = None,
 ) -> str:
     """می‌سازد VLESS share-link متناسب با پروتکل انتخاب‌شده (WS کلاسیک یا یکی از مدهای XHTTP).
     fingerprint / alpn / port در صورت ندادن، از پیش‌فرض‌های خود پروتکل استفاده می‌شوند.
@@ -452,6 +519,13 @@ def generate_vless_link(
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
     sni_val = (sni or "").strip() or host
+
+    # 🔐 پروتکل Trojan ترابرد و قالب لینک جداگانه‌ای دارد
+    if is_trojan(protocol):
+        return build_trojan_link(
+            uuid, host, remark=remark, port=port_val, sni=sni_val,
+            fingerprint=fp, alpn=alpn_val, fragment=fragment,
+        )
 
     if protocol == "vless-ws":
         path = f"/ws/{uuid}"
@@ -480,6 +554,10 @@ def generate_vless_link(
             "fp": fp,
             "alpn": alpn_val,
         }
+    # ⚡ پکت فرگمنت: با شکستن ClientHello، DPI نمی‌تواند SNI را بخواند
+    frag = fragment_query_value(fragment)
+    if frag:
+        params["fragment"] = frag
     query = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     return f"vless://{uuid}@{host}:{port_val}?{query}#{quote(remark)}"
 
@@ -500,6 +578,7 @@ def vless_link_for_link(link: dict, uid: str, host: str) -> str:
         alpn=link.get("alpn"),
         port=link.get("port"),
         sni=sni,
+        fragment=link.get("fragment"),
     )
 
 def uptime() -> str:
@@ -643,11 +722,11 @@ async def subscription_all(request: Request, _=Depends(require_auth)):
     import base64
     host = get_host(request)
     async with LINKS_LOCK:
-        lines = [
-            vless_link_for_link(d, uid, host)
-            for uid, d in LINKS.items()
-            if is_link_allowed(d)
-        ]
+        allowed = [(uid, d) for uid, d in LINKS.items() if is_link_allowed(d)]
+    # ⚖️ لودبالانسر هوشمند: سالم‌ترین/سریع‌ترین سرور همیشه ردیف اول
+    order = load_balancer.sort_uids([uid for uid, _ in allowed])
+    by_uid = dict(allowed)
+    lines = [vless_link_for_link(by_uid[uid], uid, host) for uid in order]
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(content=content, media_type="text/plain")
 
@@ -782,11 +861,13 @@ async def sub_group_subscription(uuid_key: str, request: Request):
     host = get_host(request)
     link_ids = sub.get("link_ids", [])
     async with LINKS_LOCK:
-        lines = []
-        for lid in link_ids:
-            link = LINKS.get(lid)
-            if link and is_link_allowed(link):
-                lines.append(vless_link_for_link(link, lid, host))
+        usable = {lid: dict(LINKS[lid]) for lid in link_ids
+                  if LINKS.get(lid) and is_link_allowed(LINKS[lid])}
+    # ⚖️ لودبالانسر هوشمند: پایدارترین سرور در بالاترین ردیف ساب قرار می‌گیرد
+    lines = [
+        vless_link_for_link(usable[lid], lid, host)
+        for lid in load_balancer.sort_uids([l for l in link_ids if l in usable])
+    ]
 
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(
@@ -909,6 +990,263 @@ async def api_auto_failover_config(request: Request, _=Depends(require_auth)):
     auto_failover_manager.apply_settings()
     return {"ok": True, **auto_failover_manager.get_status()}
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚛️ Quantum MultiPath Engine — داشبورد زنده پایش ۴ مسیر (از Nyx v2.3.0)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/multipath/status")
+async def api_multipath_status(_=Depends(require_auth)):
+    """وضعیت کامل: ۴ مسیر + حالت اضطراری + لودبالانسر (برای داشبورد زنده)."""
+    return {"ok": True, **multipath_full_status()}
+
+@app.post("/api/multipath/recheck")
+async def api_multipath_recheck(_=Depends(require_auth)):
+    """دکمهٔ «تست اجباری» (Force Recheck): سنجش فوری هر ۴ مسیر با یک کلیک."""
+    snap = await multipath_engine.check_all_paths()
+    await panic_manager.tick()
+    return {"ok": True, "multipath": snap, "panic": panic_manager.get_status()}
+
+@app.get("/api/multipath/panic")
+async def api_multipath_panic(_=Depends(require_auth)):
+    return {"ok": True, **panic_manager.get_status()}
+
+@app.get("/api/load-balancer/status")
+async def api_load_balancer_status(_=Depends(require_auth)):
+    """رتبه‌بندی زندهٔ کانفیگ‌ها (امتیاز ۰ تا ۱۰۰ بر پایه تاخیر/پایداری/آپتایم)."""
+    return {"ok": True, **load_balancer.get_status()}
+
+@app.post("/api/load-balancer/refresh")
+async def api_load_balancer_refresh(_=Depends(require_auth)):
+    """پایش فوری سلامت همه کانفیگ‌ها و به‌روزرسانی رتبه‌بندی."""
+    result = await load_balancer.refresh()
+    return {"ok": True, **result, **load_balancer.get_status()}
+
+@app.post("/api/multipath/config")
+async def api_multipath_config(request: Request, _=Depends(require_auth)):
+    """تنظیمات موتور: روشن/خاموش، بازهٔ پایش، لودبالانسر و اعلان‌های اضطراری."""
+    body = await request.json()
+    mp = CONFIG.setdefault("multipath", {})
+    changed = []
+    if "enabled" in body:
+        mp["enabled"] = bool(body["enabled"])
+        changed.append("موتور مسیریابی چندگانه " + ("فعال" if mp["enabled"] else "غیرفعال") + " شد")
+    if "lb_enabled" in body:
+        mp["lb_enabled"] = bool(body["lb_enabled"])
+        changed.append("لودبالانسر هوشمند " + ("فعال" if mp["lb_enabled"] else "غیرفعال") + " شد")
+    if "panic_alerts" in body:
+        mp["panic_alerts"] = bool(body["panic_alerts"])
+        changed.append("اعلان حالت اضطراری " + ("فعال" if mp["panic_alerts"] else "غیرفعال") + " شد")
+    if "interval" in body:
+        try:
+            mp["interval"] = max(5, min(600, int(body["interval"])))
+        except (TypeError, ValueError):
+            pass
+    if "lb_interval" in body:
+        try:
+            mp["lb_interval"] = max(10, min(3600, int(body["lb_interval"])))
+        except (TypeError, ValueError):
+            pass
+    await save_state()
+    for msg in changed:
+        log_activity("settings", msg, "ok")
+    multipath_engine.apply_settings()
+    load_balancer.apply_settings()
+    return {"ok": True, **multipath_full_status()}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚡ پکت فرگمنت و پروتکل‌ها
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/fragment/presets")
+async def api_fragment_presets(_=Depends(require_auth)):
+    """پریست‌های آمادهٔ اپراتورهای ایران + حالت‌های مجاز بسته‌شکنی."""
+    return {
+        "ok": True,
+        "presets": list(FRAGMENT_PRESETS.values()),
+        "default": DEFAULT_FRAGMENT_PRESET,
+        "packet_modes": list(FRAGMENT_PACKET_MODES),
+    }
+
+@app.get("/api/protocols")
+async def api_protocols(_=Depends(require_auth)):
+    """پروتکل‌های پشتیبانی‌شده به همراه برچسب فارسی/انگلیسی."""
+    return {
+        "ok": True,
+        "protocols": [{"id": p, "label": PROTOCOL_LABELS.get(p, p)} for p in PROTOCOLS],
+        "default": DEFAULT_PROTOCOL,
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🎨 برندینگ صفحه ساب مشتری (Sub Portal Custom Branding از Nyx)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/branding")
+async def api_get_branding(_=Depends(require_auth)):
+    from branding import DEFAULT_CLIENT_APPS, normalize_branding
+    return {
+        "ok": True,
+        "branding": normalize_branding(CONFIG.get("branding")),
+        "default_apps": DEFAULT_CLIENT_APPS,
+    }
+
+@app.post("/api/branding")
+async def api_set_branding(request: Request, _=Depends(require_auth)):
+    """ذخیره نام برند، لوگو، رنگ، دکمه‌های پشتیبانی/تمدید، اعلان و اپ‌ها."""
+    from branding import normalize_branding
+    body = await request.json()
+    CONFIG["branding"] = normalize_branding(body)
+    await save_state()
+    log_activity("settings", "برندینگ صفحه مشتری به‌روزرسانی شد", "ok")
+    return {"ok": True, "branding": CONFIG["branding"]}
+
+@app.get("/subinfo/{uuid}", response_class=HTMLResponse)
+async def subinfo_page(uuid: str, request: Request):
+    """صفحه شخصی‌سازی‌شدهٔ مشتری برای یک کانفیگ (بدون نیاز به ورود)."""
+    from branding import get_subinfo_html
+    async with LINKS_LOCK:
+        exists = uuid in LINKS
+    if not exists:
+        return HTMLResponse(
+            "<div style=\"font-family:sans-serif;padding:44px;text-align:center;"
+            "background:#060a14;color:#8AA0C4;min-height:100vh\">اشتراک پیدا نشد</div>",
+            status_code=404,
+        )
+    return HTMLResponse(content=get_subinfo_html(uuid, CONFIG.get("branding")))
+
+@app.get("/api/subinfo/{uuid}")
+async def api_subinfo(uuid: str, request: Request):
+    """داده‌های زندهٔ اشتراک مشتری برای صفحه /subinfo/{uuid}."""
+    async with LINKS_LOCK:
+        link = dict(LINKS[uuid]) if uuid in LINKS else None
+    if link is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    host = get_host(request)
+    expires_fa = "∞"
+    if link.get("expires_at"):
+        try:
+            exp = datetime.fromisoformat(link["expires_at"])
+            days_left = (exp - datetime.now()).days
+            expires_fa = f"{max(0, days_left)} روز" if days_left >= 0 else "منقضی"
+        except (TypeError, ValueError):
+            expires_fa = "—"
+
+    return {
+        "uuid": uuid,
+        "label": link.get("label", ""),
+        "active": is_link_allowed(link),
+        "protocol": link.get("protocol", DEFAULT_PROTOCOL),
+        "location": link.get("location", ""),
+        "used_bytes": link.get("used_bytes", 0),
+        "used_fmt": fmt_bytes(link.get("used_bytes", 0)),
+        "limit_bytes": link.get("limit_bytes", 0),
+        "limit_fmt": "∞" if link.get("limit_bytes", 0) == 0 else fmt_bytes(link["limit_bytes"]),
+        "expires_at": link.get("expires_at"),
+        "expires_fa": expires_fa,
+        "connections": sum(1 for c in connections.values() if c.get("uuid") == uuid),
+        "vless_link": vless_link_for_link(link, uuid, host),
+        "sub_url": f"https://{host}/sub/{uuid}",
+        "subinfo_url": f"https://{host}/subinfo/{uuid}",
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 💾 بکاپ خودکار دیتابیس در تلگرام و بازیابی ۱-کلیک (از Nyx)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/backup/status")
+async def api_backup_status(_=Depends(require_auth)):
+    return {"ok": True, **backup_manager.get_status()}
+
+@app.post("/api/backup/now")
+async def api_backup_now(_=Depends(require_auth)):
+    """ساخت بکاپ فوری و ارسال آن به تلگرام ادمین."""
+    result = await backup_manager.send_backup("دستی")
+    return result
+
+@app.get("/api/backup/download")
+async def api_backup_download(_=Depends(require_auth)):
+    """دانلود مستقیم فایل بکاپ از پنل."""
+    payload, meta = await build_backup()
+    stamp = now_ir().strftime("%Y-%m-%d_%H-%M")
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="xr-backup-{stamp}.json"',
+            "X-Backup-Checksum": meta["checksum_sha256"],
+        },
+    )
+
+@app.post("/api/backup/restore")
+async def api_backup_restore(request: Request, _=Depends(require_auth)):
+    """بازیابی از فایل بکاپ آپلودشده (بدنه = خود فایل JSON)."""
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="فایل بکاپ خالی است")
+    keep_pw = request.query_params.get("keep_password", "") in ("1", "true", "yes")
+    try:
+        result = await restore_backup(raw, keep_password=keep_pw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, **result}
+
+@app.post("/api/backup/config")
+async def api_backup_config(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    c = CONFIG.setdefault("backup", {})
+    if "enabled" in body:
+        c["enabled"] = bool(body["enabled"])
+        log_activity("settings",
+                     "بکاپ خودکار " + ("فعال" if c["enabled"] else "غیرفعال") + " شد", "ok")
+    if "interval_hours" in body:
+        try:
+            c["interval_hours"] = max(1, min(720, int(body["interval_hours"])))
+        except (TypeError, ValueError):
+            pass
+    await save_state()
+    backup_manager.apply_settings()
+    return {"ok": True, **backup_manager.get_status()}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🌐 خروجی کلودفلر WARP (رفع تحریم OpenAI/Netflix + مخفی‌سازی IP سرور)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/warp/status")
+async def api_warp_status(_=Depends(require_auth)):
+    return {"ok": True, **warp_manager.get_status()}
+
+@app.post("/api/warp/test")
+async def api_warp_test(_=Depends(require_auth)):
+    """تست زندهٔ در دسترس بودن پروکسی WARP."""
+    return {"ok": True, **(await warp_manager.test())}
+
+@app.post("/api/warp/config")
+async def api_warp_config(request: Request, _=Depends(require_auth)):
+    """تنظیم روشن/خاموش، آدرس پروکسی، حالت مسیریابی و لیست دامنه‌ها."""
+    body = await request.json()
+    w = CONFIG.setdefault("warp", {})
+    if "enabled" in body:
+        w["enabled"] = bool(body["enabled"])
+        log_activity("settings",
+                     "خروجی کلودفلر WARP " + ("فعال" if w["enabled"] else "غیرفعال") + " شد", "ok")
+    if "proxy" in body:
+        candidate = str(body.get("proxy") or "").strip()
+        if candidate and parse_proxy(candidate) is None:
+            raise HTTPException(
+                status_code=400,
+                detail="آدرس پروکسی نامعتبر است — نمونه درست: socks5://127.0.0.1:40000",
+            )
+        w["proxy"] = candidate
+    if "mode" in body:
+        m = str(body.get("mode") or "domains").lower()
+        w["mode"] = m if m in ("domains", "all") else "domains"
+    if "domains" in body:
+        w["domains"] = normalize_domains(body.get("domains"))
+    if body.get("reset_domains"):
+        w["domains"] = list(DEFAULT_WARP_DOMAINS)
+    await save_state()
+    return {"ok": True, **warp_manager.get_status()}
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
 async def get_stats(_=Depends(require_auth)):
@@ -1012,6 +1350,7 @@ async def make_link(
     location: str = "",
     cdn_host: str = "",
     sni: str = "",
+    fragment: dict | None = None,
 ) -> tuple[str, dict]:
     if protocol not in PROTOCOLS:
         protocol = DEFAULT_PROTOCOL
@@ -1041,6 +1380,7 @@ async def make_link(
             "location": (location or "").strip()[:60],
             "cdn_host": clean_cdn_domain(cdn_host),
             "sni": (sni or "").strip()[:100],
+            "fragment": normalize_fragment(fragment),
         }
     if sub_id:
         async with SUBS_LOCK:
@@ -1177,6 +1517,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         location=body.get("location") or "",
         cdn_host=body.get("cdn_host") or "",
         sni=body.get("sni") or "",
+        fragment=body.get("fragment"),
     )
 
     host = get_host(request)
@@ -1263,7 +1604,13 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["cdn_host"] = clean_cdn_domain(body.get("cdn_host") or "")
         if "sni" in body:
             link["sni"] = (body.get("sni") or "").strip()[:100]
-        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host", "sni")):
+        if "protocol" in body:
+            pr = str(body.get("protocol") or DEFAULT_PROTOCOL).strip().lower()
+            link["protocol"] = pr if pr in PROTOCOLS else DEFAULT_PROTOCOL
+        if "fragment" in body:
+            # ⚡ تنظیمات پکت فرگمنت (پریست اپراتور یا مقادیر دستی)
+            link["fragment"] = normalize_fragment(body.get("fragment"))
+        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host", "sni", "protocol", "fragment")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -1890,6 +2237,26 @@ async def node_api_subs(request: Request, _=Depends(require_node_api)):
 from auto_failover import auto_failover_manager, test_sni_domain, FALLBACK_SNI_POOL
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ⚛️ Quantum MultiPath Engine + Panic Mode + Smart Load Balancer — از Nyx v2.3.0
+# ══════════════════════════════════════════════════════════════════════════════
+
+from multipath import (
+    multipath_engine,
+    panic_manager,
+    load_balancer,
+    get_full_status as multipath_full_status,
+    start_all as multipath_start_all,
+    stop_all as multipath_stop_all,
+)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 💾 بکاپ خودکار تلگرام  و  🌐 خروجی کلودفلر WARP — از Nyx Panel
+# ══════════════════════════════════════════════════════════════════════════════
+
+from backup_service import backup_manager, build_backup, restore_backup
+from warp_service import DEFAULT_WARP_DOMAINS, normalize_domains, parse_proxy, warp_manager
+
+# ══════════════════════════════════════════════════════════════════════════════
 # VLESS Relay — جدا شده به relay_vless.py (دست نخورده)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1903,6 +2270,13 @@ from relay_vless import (
 )
 
 app.add_api_websocket_route("/ws/{uuid}", websocket_tunnel)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔐 Trojan Relay — رلهٔ واقعی پروتکل Trojan روی WebSocket
+# ══════════════════════════════════════════════════════════════════════════════
+from relay_trojan import trojan_tunnel
+
+app.add_api_websocket_route("/trojan/{uuid}", trojan_tunnel)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # XHTTP — Siz10a XHTTP Ultra (ترابرد جدید، جدا از VLESS/WS، هر ۳ مد)
