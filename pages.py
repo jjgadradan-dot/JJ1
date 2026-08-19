@@ -492,6 +492,48 @@ a{color:inherit;text-decoration:none}
 .lb-score{font-size:13px;font-weight:800;font-family:ui-monospace,monospace;direction:ltr;flex-shrink:0}
 .lb-sub{font-size:9px;color:var(--t3);flex-shrink:0;text-align:left;direction:ltr;font-family:ui-monospace,monospace}
 
+/* ══════ 🔍 جستجوی لحظه‌ای (Instant Live Search) ══════ */
+.srch{position:relative;margin-bottom:14px}
+.srch input{width:100%;background:var(--card);border:1px solid var(--card-b);border-radius:15px;
+padding:13px 44px 13px 44px;color:var(--t1);font-family:inherit;font-size:12.5px;transition:.18s;outline:none}
+.srch input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-d)}
+.srch input::placeholder{color:var(--t3)}
+.srch>i{position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:16px;pointer-events:none}
+.srch-clr{position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.07);
+border:none;border-radius:8px;width:24px;height:24px;color:var(--t3);cursor:pointer;display:none;
+align-items:center;justify-content:center;font-size:13px}
+.srch-clr.on{display:flex}
+.srch-clr:hover{color:var(--t1);background:rgba(255,255,255,.13)}
+.srch-cnt{font-size:10.5px;color:var(--t3);margin:-6px 6px 12px;display:none}
+.srch-cnt.on{display:block}
+.srch-cnt b{color:var(--accent);font-weight:800}
+.srch-none{text-align:center;padding:34px 18px;color:var(--t3);font-size:12.5px}
+.srch-none i{font-size:32px;display:block;margin-bottom:11px;opacity:.5}
+mark{background:rgba(251,191,36,.3);color:#fde68a;border-radius:3px;padding:0 2px}
+/* ══════ 🎨 برندینگ / 💾 بکاپ / 🌐 WARP ══════ */
+.br-panel{border-color:rgba(236,72,153,.26)}
+.br-panel .pw-hero-icon{background:linear-gradient(135deg,#EC4899,#8B5CF6)}
+.bk-panel{border-color:rgba(56,189,248,.26)}
+.bk-panel .pw-hero-icon{background:linear-gradient(135deg,#38BDF8,#22C55E)}
+.wp-panel{border-color:rgba(249,115,22,.26)}
+.wp-panel .pw-hero-icon{background:linear-gradient(135deg,#F97316,#FBBF24)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.g2{grid-template-columns:1fr}}
+.sw-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+background:rgba(0,0,0,.18);border:1px solid var(--card-b);border-radius:12px;padding:11px 13px;margin-bottom:9px}
+.sw-row span{font-size:11.5px;color:var(--t2);font-weight:600}
+.sw{position:relative;width:42px;height:23px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw i{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:20px;cursor:pointer;transition:.22s}
+.sw i::before{content:'';position:absolute;width:17px;height:17px;right:3px;top:3px;
+background:#fff;border-radius:50%;transition:.22s}
+.sw input:checked+i{background:var(--accent)}
+.sw input:checked+i::before{transform:translateX(-19px)}
+.tag-box{display:flex;flex-wrap:wrap;gap:5px;max-height:120px;overflow-y:auto;
+background:rgba(0,0,0,.2);border:1px solid var(--card-b);border-radius:12px;padding:10px;margin-top:8px}
+.tag{font-size:9.5px;font-weight:700;padding:4px 9px;border-radius:20px;
+background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monospace,monospace}
+
 /* ══════ اتصالات فعال - نسخه پیشرفته ══════ */
 .conn-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
 .conn-hero-tile{background:var(--card);border:1px solid var(--card-b);border-radius:16px;padding:16px 18px;position:relative;overflow:hidden;transition:.2s}
@@ -1179,6 +1221,12 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
   </div>
+  <div class="srch">
+    <i class="ti ti-search"></i>
+    <input id="q-links" placeholder="جستجوی لحظه‌ای: نام، UUID، پروتکل، پورت، SNI، دامنه، لوکیشن، وضعیت (فعال/منقضی)..." oninput="filterLinks()">
+    <button class="srch-clr" id="q-links-clr" onclick="clearQ('links')"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="srch-cnt" id="q-links-cnt"></div>
   <div class="cfg-grid" id="links-grid"></div>
   <div class="empty" id="links-empty" style="display:none"><i class="ti ti-link-off"></i><p>هنوز کانفیگی وجود ندارد</p></div>
 </section>
@@ -1196,6 +1244,12 @@ a{color:inherit;text-decoration:none}
       <input type="text" id="subs-search-inp" placeholder="جستجو در گروه‌ها..." oninput="filterSubs(this.value)">
     </div>
   </div>
+  <div class="srch">
+    <i class="ti ti-search"></i>
+    <input id="q-subs" placeholder="جستجوی گروه: نام، توضیح یا کلید عمومی..." oninput="filterSubs()">
+    <button class="srch-clr" id="q-subs-clr" onclick="clearQ('subs')"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="srch-cnt" id="q-subs-cnt"></div>
   <div class="sub-grid" id="subs-grid">
     <div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-folders"></i></div><div class="subs-empty-v2-title">هنوز گروهی وجود ندارد</div><div class="subs-empty-v2-sub">یک گروه جدید بسازید تا کانفیگ‌ها را دسته‌بندی کنید</div></div>
   </div>
@@ -1591,6 +1645,101 @@ a{color:inherit;text-decoration:none}
       <div class="lb-list" id="lb-list"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز کانفیگی رتبه‌بندی نشده</div></div>
     </div>
   </div>
+  <div class="pw-panel br-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-palette"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">🎨 برندینگ صفحه مشتری</div>
+        <div class="pw-hero-sub">صفحه‌ی اختصاصی هر مشتری در آدرس <b dir="ltr">/subinfo/{uuid}</b> — نام فروشگاه، لوگو، رنگ، دکمه‌های پشتیبانی و تمدید، کادر اعلان و باکس دانلود نرم‌افزارها (از Nyx Panel)</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="g2">
+        <div class="pw-field"><label>نام برند / فروشگاه</label>
+          <input class="pw-input" id="br-name" placeholder="مثلاً: فروشگاه علی" style="padding-right:14px"></div>
+        <div class="pw-field"><label>رنگ اصلی (HEX)</label>
+          <input class="pw-input" id="br-accent" dir="ltr" placeholder="#3B7CF6" style="padding-right:14px"></div>
+      </div>
+      <div class="pw-field"><label>آدرس لوگو (اختیاری — فقط http/https)</label>
+        <input class="pw-input" id="br-logo" dir="ltr" placeholder="https://example.com/logo.png" style="padding-right:14px"></div>
+      <div class="g2">
+        <div class="pw-field"><label>آیدی تلگرام پشتیبانی</label>
+          <input class="pw-input" id="br-support" dir="ltr" placeholder="@support_id" style="padding-right:14px"></div>
+        <div class="pw-field"><label>آیدی/کانال تمدید اشتراک</label>
+          <input class="pw-input" id="br-renew" dir="ltr" placeholder="@shop_channel" style="padding-right:14px"></div>
+      </div>
+      <div class="pw-field"><label>کادر اعلان به مشتریان (بالای صفحه ساب)</label>
+        <input class="pw-input" id="br-notice" placeholder="مثلاً: سرورها ارتقا یافتند 🚀" style="padding-right:14px"></div>
+      <div class="pw-field"><label>متن فوتر</label>
+        <input class="pw-input" id="br-footer" placeholder="© فروشگاه من ۱۴۰۴" style="padding-right:14px"></div>
+      <div class="sw-row"><span>نمایش باکس دانلود نرم‌افزارها (v2rayNG / Streisand / v2rayN / Hiddify)</span>
+        <label class="sw"><input type="checkbox" id="br-apps" checked><i></i></label></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:160px;background:linear-gradient(135deg,#EC4899,#8B5CF6)" onclick="saveBranding()"><i class="ti ti-device-floppy"></i> ذخیره برندینگ</button>
+        <button class="cdn-reset" onclick="previewBranding()"><i class="ti ti-external-link"></i> پیش‌نمایش</button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>لینک اختصاصی هر مشتری: <b dir="ltr">https://دامنه-شما/subinfo/&lt;UUID&gt;</b> — این صفحه بدون نیاز به ورود باز می‌شود و حجم مصرفی، انقضا، لوکیشن و کانفیگ را با QR و دکمه کپی نشان می‌دهد. برای امنیت، فقط آدرس‌های <b dir="ltr">http/https</b> پذیرفته می‌شوند.</span></div>
+    </div>
+  </div>
+  <div class="pw-panel bk-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-database-export"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">💾 بکاپ خودکار در تلگرام <span class="mp-badge" id="bk-badge">در حال بارگذاری...</span></div>
+        <div class="pw-hero-sub">ارسال خودکار فایل دیتابیس با کد اعتبارسنجی SHA-256 به تلگرام ادمین — برای بازیابی کافی است همان فایل را دوباره برای ربات بفرستید (از Nyx Panel)</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">آخرین بکاپ</div><div class="af-tile-val fa" id="bk-last">—</div></div>
+        <div class="af-tile"><div class="af-tile-label">تعداد کل</div><div class="af-tile-val" id="bk-total">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">بازه (ساعت)</div><div class="af-tile-val" id="bk-int">۲۴</div></div>
+        <div class="af-tile"><div class="af-tile-label">کد اعتبارسنجی</div><div class="af-tile-val" id="bk-sum">—</div></div>
+      </div>
+      <div class="pw-field"><label>بازه بکاپ خودکار (ساعت)</label>
+        <input class="pw-input" type="number" id="bk-hours" min="1" max="720" dir="ltr" placeholder="24" style="padding-right:14px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:150px;background:linear-gradient(135deg,#38BDF8,#22C55E)" onclick="backupNow(this)"><i class="ti ti-send"></i> بکاپ فوری به تلگرام</button>
+        <button class="pw-submit" style="flex:1;min-width:150px" onclick="downloadBackup()"><i class="ti ti-download"></i> دانلود فایل بکاپ</button>
+        <button class="cdn-reset" onclick="document.getElementById('bk-file').click()"><i class="ti ti-upload"></i> بازیابی</button>
+        <button class="cdn-reset" id="bk-toggle-btn" onclick="toggleBackup()"><i class="ti ti-power"></i> <span id="bk-toggle-lbl">غیرفعال‌سازی</span></button>
+      </div>
+      <input type="file" id="bk-file" accept=".json,application/json" style="display:none" onchange="restoreBackup(this)">
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>برای ارسال به تلگرام باید <b dir="ltr">TELEGRAM_BOT_TOKEN</b> و <b dir="ltr">TELEGRAM_ADMIN_IDS</b> تنظیم شده باشند. قبل از هر بازیابی، یک <b>نسخه ایمنی</b> از وضعیت فعلی ذخیره می‌شود و فایل‌های دستکاری‌شده به‌خاطر نخواندن کد SHA-256 رد می‌شوند.</span></div>
+      <div class="af-history" id="bk-hist"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز بکاپی گرفته نشده</div></div>
+    </div>
+  </div>
+  <div class="pw-panel wp-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-world-bolt"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">🌐 خروجی کلودفلر WARP <span class="mp-badge" id="wp-badge">در حال بارگذاری...</span></div>
+        <div class="pw-hero-sub">رفع تحریم OpenAI، ChatGPT، Claude، Netflix و Spotify + مخفی‌سازی IP واقعی سرور — ترافیک مقصدهای انتخابی از شبکه کلودفلر عبور می‌کند (از Nyx Panel)</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">از مسیر WARP</div><div class="af-tile-val" id="wp-via">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">مستقیم</div><div class="af-tile-val" id="wp-direct">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">برگشت اضطراری</div><div class="af-tile-val" id="wp-fb">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">دامنه‌ها</div><div class="af-tile-val" id="wp-dc">۰</div></div>
+      </div>
+      <div class="pw-field"><label>آدرس پروکسی WARP (wireproxy / warp-svc محلی)</label>
+        <input class="pw-input" id="wp-proxy" dir="ltr" placeholder="socks5://127.0.0.1:40000" style="padding-right:14px"></div>
+      <div class="sw-row"><span>حالت «همه ترافیک» (به‌جای فقط دامنه‌های لیست)</span>
+        <label class="sw"><input type="checkbox" id="wp-all"><i></i></label></div>
+      <div class="pw-field"><label>دامنه‌های عبوری از WARP (هر خط یا با کاما جدا شود)</label>
+        <input class="pw-input" id="wp-domains" dir="ltr" placeholder="openai.com, netflix.com, spotify.com" style="padding-right:14px"></div>
+      <div class="tag-box" id="wp-tags"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="pw-submit" style="flex:1;min-width:150px;background:linear-gradient(135deg,#F97316,#FBBF24)" onclick="saveWarp()"><i class="ti ti-device-floppy"></i> ذخیره تنظیمات</button>
+        <button class="pw-submit" style="flex:1;min-width:150px" onclick="testWarp(this)"><i class="ti ti-plug-connected"></i> تست اتصال</button>
+        <button class="cdn-reset" onclick="resetWarpDomains()"><i class="ti ti-refresh"></i> لیست پیش‌فرض</button>
+        <button class="cdn-reset" id="wp-toggle-btn" onclick="toggleWarp()"><i class="ti ti-power"></i> <span id="wp-toggle-lbl">فعال‌سازی</span></button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>پنل XR رلهٔ پایتونی خودش را دارد، بنابراین WARP از طریق یک پروکسی <b dir="ltr">SOCKS5/HTTP</b> محلی (معمولاً <b dir="ltr">wireproxy</b>) روی همان سرور کار می‌کند. اگر پروکسی از کار بیفتد، اتصال به‌صورت خودکار <b>مستقیم</b> برقرار می‌شود تا سرویس کاربران هرگز قطع نشود.</span></div>
+    </div>
+  </div>
 </section>
 <section class="pg" id="pg-support">
   <div class="topbar"><div><div class="tb-title"><i class="ti ti-headset"></i> پشتیبانی</div></div></div>
@@ -1931,6 +2080,8 @@ async function loadLinks(){
 }).join('');
     document.getElementById('lsummary').innerHTML=links.slice(0,6).map(l=>`<div class="sr"><span class="sr-k" style="gap:5px"><i class="ti ${l.expired?'ti-calendar-x':l.active?'ti-circle-check':'ti-circle-x'}" style="color:${l.expired?'var(--amber)':l.active?'var(--green)':'var(--red)'}"></i>${esc(l.label)}</span><span class="sr-v" style="font-size:10px">${fmtB(l.used_bytes)} / ${l.limit_bytes===0?'∞':fmtB(l.limit_bytes)}</span></div>`).join('');
   }catch(e){console.error(e)}
+
+  if(Q.links)filterLinks();   // 🔍 حفظ جستجوی فعال بعد از رفرش خودکار
 }
 async function createLink(){
   const label=document.getElementById('nl-label').value.trim()||'کانفیگ جدید';
@@ -2026,6 +2177,8 @@ async function loadSubs(){
     document.getElementById('subs-nb').textContent=subs.length;
     document.getElementById('subs-pg-cnt').textContent=toFa(subs.length)+' گروه';
     renderSubsGrid(subs);
+    allSubsList=subs;
+    if(Q.subs)filterSubs();   // 🔍 حفظ جستجوی فعال بعد از رفرش خودکار
   }catch(e){console.error(e)}
 }
 function renderSubsGrid(subs){
@@ -2606,6 +2759,225 @@ async function toggleLoadBalancer(){
     loadMultiPath();
   }catch(e){toast('خطا','err')}
 }
+/* ══════ 🔍 جستجوی لحظه‌ای کاربران و اینباندها (Instant Live Search) ══════ */
+const Q={links:'',subs:''};
+/* اعداد فارسی/عربی را به لاتین تبدیل می‌کند تا جستجو با هر صفحه‌کلیدی کار کند */
+function normQ(v){
+  return String(v??'').toLowerCase()
+    .replace(/[۰-۹]/g,d=>'0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)])
+    .replace(/[٠-٩]/g,d=>'0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)])
+    .replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').trim();
+}
+function clearQ(kind){
+  const inp=document.getElementById('q-'+kind);
+  if(inp){inp.value='';inp.focus();}
+  kind==='links'?filterLinks():filterSubs();
+}
+function syncSrchUi(kind,shown,total){
+  const q=Q[kind];
+  const clr=document.getElementById('q-'+kind+'-clr');
+  const cnt=document.getElementById('q-'+kind+'-cnt');
+  if(clr)clr.classList.toggle('on',!!q);
+  if(cnt){
+    cnt.classList.toggle('on',!!q);
+    if(q)cnt.innerHTML='<b>'+toFa(shown)+'</b> نتیجه از '+toFa(total)+' مورد';
+  }
+}
+/* متن قابل جستجوی یک کانفیگ */
+function linkHaystack(l){
+  const st=(!l.active?'غیرفعال off disabled':(l.expired?'منقضی expired':'فعال on active'));
+  const grp=(allSubsList.find(s=>s.sub_id===l.sub_id)||{}).name||'';
+  return normQ([l.label,l.uuid,l.protocol,l.port,l.sni,l.cdn_host,l.location,
+                l.fingerprint,l.note,grp,st].join(' '));
+}
+function filterLinks(){
+  const inp=document.getElementById('q-links');
+  Q.links=normQ(inp?inp.value:'');
+  const cards=document.querySelectorAll('#links-grid .cfg-card');
+  const list=allLinksList||[];
+  let shown=0;
+  cards.forEach((card,i)=>{
+    const l=list[i];
+    const hit=!Q.links||(l&&linkHaystack(l).includes(Q.links));
+    card.style.display=hit?'':'none';
+    if(hit)shown++;
+  });
+  const grid=document.getElementById('links-grid');
+  let none=document.getElementById('links-none');
+  if(Q.links&&shown===0){
+    if(!none){
+      none=document.createElement('div');
+      none.id='links-none';none.className='srch-none';
+      none.innerHTML='<i class="ti ti-search-off"></i>هیچ کانفیگی با این جستجو پیدا نشد';
+      grid.parentNode.insertBefore(none,grid.nextSibling);
+    }
+    none.style.display='block';
+  }else if(none)none.style.display='none';
+  syncSrchUi('links',shown,cards.length);
+}
+function filterSubs(){
+  const inp=document.getElementById('q-subs');
+  Q.subs=normQ(inp?inp.value:'');
+  const cards=document.querySelectorAll('#subs-grid .sub-card');
+  const list=allSubsList||[];
+  let shown=0;
+  cards.forEach((card,i)=>{
+    const sg=list[i];
+    const hay=sg?normQ([sg.name,sg.desc,sg.uuid_key].join(' ')):normQ(card.textContent);
+    const hit=!Q.subs||hay.includes(Q.subs);
+    card.style.display=hit?'':'none';
+    if(hit)shown++;
+  });
+  syncSrchUi('subs',shown,cards.length);
+}
+/* ══════ 🎨 برندینگ صفحه مشتری ══════ */
+async function loadBranding(){
+  try{
+    const r=await authF('/api/branding');const d=await r.json();const b=d.branding||{};
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||''};
+    set('br-name',b.brand_name);set('br-accent',b.accent);set('br-logo',b.logo_url);
+    set('br-notice',b.notice);set('br-footer',b.footer);
+    set('br-support',b.support_telegram);set('br-renew',b.renew_telegram);
+    const ap=document.getElementById('br-apps');if(ap)ap.checked=b.show_apps!==false;
+  }catch(e){console.error(e)}
+}
+async function saveBranding(){
+  const v=id=>(document.getElementById(id)||{}).value||'';
+  try{
+    const r=await authF('/api/branding',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({brand_name:v('br-name'),accent:v('br-accent'),logo_url:v('br-logo'),
+        support_telegram:v('br-support'),renew_telegram:v('br-renew'),
+        notice:v('br-notice'),footer:v('br-footer'),
+        show_apps:document.getElementById('br-apps').checked})});
+    if(!r.ok)throw new Error();
+    toast('برندینگ صفحه مشتری ذخیره شد ✓','ok');loadBranding();
+  }catch(e){toast('خطا در ذخیره برندینگ','err')}
+}
+function previewBranding(){
+  const l=(allLinksList||[])[0];
+  if(!l){toast('اول یک کانفیگ بسازید','err');return}
+  window.open('/subinfo/'+l.uuid,'_blank');
+}
+/* ══════ 💾 بکاپ خودکار تلگرام ══════ */
+async function loadBackup(){
+  try{
+    const r=await authF('/api/backup/status');const d=await r.json();
+    const badge=document.getElementById('bk-badge');if(!badge)return;
+    const on=d.enabled&&d.running;
+    badge.textContent=on?'فعال 💾':(d.enabled?'در انتظار':'غیرفعال');
+    badge.className='mp-badge '+(on?'excellent':'');
+    document.getElementById('bk-last').textContent=d.last_backup?new Date(d.last_backup).toLocaleString('fa-IR'):'—';
+    document.getElementById('bk-total').textContent=toFa(d.total_backups||0);
+    document.getElementById('bk-int').textContent=toFa(d.interval_hours||24);
+    document.getElementById('bk-sum').textContent=d.last_checksum?d.last_checksum.slice(0,10)+'…':'—';
+    document.getElementById('bk-hours').value=d.interval_hours||24;
+    document.getElementById('bk-toggle-lbl').textContent=d.enabled?'غیرفعال‌سازی':'فعال‌سازی';
+    const box=document.getElementById('bk-hist');const h=d.history||[];
+    box.innerHTML=h.length?h.map(x=>`<div class="af-h-item"><b class="ok">${esc(x.filename)}</b> · ${toFa(x.size_fmt)} · ${toFa(x.links)} کانفیگ<br><span class="af-h-time"><i class="ti ti-clock"></i> ${new Date(x.time).toLocaleString('fa-IR')} · ${esc(x.reason)} · ارسال به ${toFa(x.sent_to)} ادمین</span></div>`).join('')
+      :'<div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز بکاپی گرفته نشده</div>';
+  }catch(e){console.error(e)}
+}
+async function backupNow(btn){
+  if(btn){btn.disabled=true;btn.style.opacity=.6}
+  try{
+    const r=await authF('/api/backup/now',{method:'POST'});const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'');
+    toast(d.sent_to>0?`💾 بکاپ برای ${toFa(d.sent_to)} ادمین ارسال شد`:'بکاپ ساخته شد (رباتی برای ارسال تنظیم نشده)',d.sent_to>0?'ok':'err');
+    loadBackup();
+  }catch(e){toast('خطا در ساخت بکاپ','err')}
+  finally{if(btn){btn.disabled=false;btn.style.opacity=1}}
+}
+async function downloadBackup(){
+  try{
+    const r=await authF('/api/backup/download');
+    if(!r.ok)throw new Error();
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='xr-backup-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast('فایل بکاپ دانلود شد ✓','ok');
+  }catch(e){toast('خطا در دانلود بکاپ','err')}
+}
+async function restoreBackup(input){
+  const f=input.files&&input.files[0];input.value='';
+  if(!f)return;
+  if(!confirm('⚠️ بازیابی، همه کانفیگ‌ها و تنظیمات فعلی را با محتوای فایل جایگزین می‌کند.\n\nیک نسخه ایمنی از وضعیت فعلی ذخیره خواهد شد.\n\nادامه می‌دهید؟'))return;
+  try{
+    const raw=await f.text();
+    const r=await authF('/api/backup/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:raw});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'');
+    toast(`✅ ${toFa(d.links_restored)} کانفیگ و ${toFa(d.subs_restored)} گروه بازگردانی شد`,'ok');
+    loadLinks();loadSubs();loadBackup();loadBranding();
+  }catch(e){toast('بازیابی ناموفق: '+(e.message||'فایل نامعتبر'),'err')}
+}
+async function toggleBackup(){
+  try{
+    const r=await authF('/api/backup/status');const d=await r.json();
+    const hours=parseInt(document.getElementById('bk-hours').value)||24;
+    const res=await authF('/api/backup/config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:!d.enabled,interval_hours:hours})});
+    if(!res.ok)throw new Error();
+    toast(d.enabled?'بکاپ خودکار غیرفعال شد':'بکاپ خودکار فعال شد','ok');loadBackup();
+  }catch(e){toast('خطا','err')}
+}
+/* ══════ 🌐 خروجی کلودفلر WARP ══════ */
+async function loadWarp(){
+  try{
+    const r=await authF('/api/warp/status');const d=await r.json();
+    const badge=document.getElementById('wp-badge');if(!badge)return;
+    badge.textContent=d.enabled?(d.proxy_valid?'فعال 🌐':'پروکسی نامعتبر ⚠️'):'غیرفعال';
+    badge.className='mp-badge '+(d.enabled?(d.proxy_valid?'excellent':'degraded'):'');
+    document.getElementById('wp-via').textContent=toFa(d.total_via_warp||0);
+    document.getElementById('wp-direct').textContent=toFa(d.total_direct||0);
+    document.getElementById('wp-fb').textContent=toFa(d.total_fallback||0);
+    document.getElementById('wp-dc').textContent=toFa(d.domains_count||0);
+    document.getElementById('wp-proxy').value=d.proxy||'';
+    document.getElementById('wp-all').checked=d.mode==='all';
+    document.getElementById('wp-toggle-lbl').textContent=d.enabled?'غیرفعال‌سازی':'فعال‌سازی';
+    document.getElementById('wp-tags').innerHTML=(d.domains||[]).map(x=>'<span class="tag">'+esc(x)+'</span>').join('')
+      ||'<span style="font-size:10px;color:var(--t3)">لیست خالی است</span>';
+  }catch(e){console.error(e)}
+}
+async function saveWarp(){
+  const dm=(document.getElementById('wp-domains').value||'').trim();
+  const body={proxy:document.getElementById('wp-proxy').value.trim(),
+              mode:document.getElementById('wp-all').checked?'all':'domains'};
+  if(dm)body.domains=dm;
+  try{
+    const r=await authF('/api/warp/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'');
+    document.getElementById('wp-domains').value='';
+    toast('تنظیمات WARP ذخیره شد ✓','ok');loadWarp();
+  }catch(e){toast(e.message||'خطا در ذخیره WARP','err')}
+}
+async function testWarp(btn){
+  if(btn){btn.disabled=true;btn.style.opacity=.6}
+  try{
+    const r=await authF('/api/warp/test',{method:'POST'});const d=await r.json();
+    toast(d.ok?`✅ پروکسی WARP سالم است (${toFa(Math.round(d.latency_ms))}ms)`:'❌ '+(d.error||'پروکسی در دسترس نیست'),d.ok?'ok':'err');
+    loadWarp();
+  }catch(e){toast('خطا در تست WARP','err')}
+  finally{if(btn){btn.disabled=false;btn.style.opacity=1}}
+}
+async function toggleWarp(){
+  try{
+    const r=await authF('/api/warp/status');const d=await r.json();
+    const res=await authF('/api/warp/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!d.enabled})});
+    if(!res.ok)throw new Error();
+    toast(d.enabled?'خروجی WARP غیرفعال شد':'خروجی WARP فعال شد','ok');loadWarp();
+  }catch(e){toast('خطا','err')}
+}
+async function resetWarpDomains(){
+  try{
+    const r=await authF('/api/warp/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_domains:true})});
+    if(!r.ok)throw new Error();
+    toast('لیست دامنه‌ها به حالت پیش‌فرض برگشت ✓','ok');loadWarp();
+  }catch(e){toast('خطا','err')}
+}
 function togglePwField(id,btn){
   const inp=document.getElementById(id);
   const icon=btn.querySelector('i');
@@ -2715,9 +3087,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
   initCharts();
   document.getElementById('set-host').textContent=location.host;
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
-  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();loadMultiPath();
+  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();loadMultiPath();loadBranding();loadBackup();loadWarp();
   setInterval(fetchStats,4000);
-  setInterval(()=>{if(document.getElementById('pg-settings')&&document.getElementById('pg-settings').classList.contains('on'))loadMultiPath();},8000);
+  setInterval(()=>{if(document.getElementById('pg-settings')&&document.getElementById('pg-settings').classList.contains('on')){loadMultiPath();loadBackup();loadWarp();}},8000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
     if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();

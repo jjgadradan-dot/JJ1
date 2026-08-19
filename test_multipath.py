@@ -125,6 +125,8 @@ async def test_panic_hysteresis():
 def test_load_balancer_sorting():
     print("\n▶ مرتب‌سازی لودبالانسر")
     lb = load_balancer
+    # مستقل از متغیرهای محیطی، لودبالانسر را برای این تست روشن می‌کنیم
+    main.CONFIG.setdefault("multipath", {})["lb_enabled"] = True
     lb.health = {
         "a": {"uid": "a", "score": 40, "healthy": True},
         "b": {"uid": "b", "score": 95, "healthy": True},
