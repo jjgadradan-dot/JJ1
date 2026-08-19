@@ -1,7 +1,9 @@
-# pages.py  -  XR v9.9
+# pages.py  -  XR (نسخه از version.py خوانده می‌شود)
 # شامل: LOGIN_HTML, DASHBOARD_HTML, get_public_page_html()
 
 # لوگوی XR (به‌صورت base64 داخلی، بدون نیاز به هاست خارجی)
+from version import VERSION
+
 LOGO_B64 = "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"
 
 LOGIN_HTML = r"""<!DOCTYPE html>
@@ -61,7 +63,7 @@ input:focus+.ic{color:var(--accent)}
   <div class="card">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.9</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v__VERSION__</div></div>
     </div>
     <h1>ورود به پنل</h1>
     <p class="sub">رمز عبور را برای دسترسی به داشبورد وارد کنید</p>
@@ -976,7 +978,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
   <button class="sb-close" id="close-sb"><i class="ti ti-x"></i></button>
   <div class="logo">
     <div class="logo-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-    <div><div class="logo-name">XR</div><div class="logo-sub">v9.9</div></div>
+    <div><div class="logo-name">XR</div><div class="logo-sub">v__VERSION__</div></div>
   </div>
   <div class="nav-wrap">
     <div class="nav-sec">پنل</div>
@@ -993,7 +995,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
-    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v9.9</span></div>
+    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v__VERSION__</span></div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
   </div>
@@ -1056,7 +1058,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     </div>
   </div>
   <div class="dash-footer">
-    <span class="df-text">XR v9.9 · مستر + نود · Railway</span>
+    <span class="df-text">XR v__VERSION__ · مستر + نود · Railway</span>
     <a class="df-link" href="https://t.me/Farajian2004f" target="_blank"><i class="ti ti-brand-telegram"></i> t.me/Farajian2004f</a>
     
   </div>
@@ -1481,7 +1483,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
       <div class="chg-head-title">تاریخچه بروزرسانی‌های XR</div>
       <div class="chg-head-sub">فهرست امکانات جدید، بهبودها و رفع اشکال‌ها در هر نسخه</div>
     </div>
-    <div class="chg-head-ver">نسخه فعلی: v9.9</div>
+    <div class="chg-head-ver">نسخه فعلی: v__VERSION__</div>
   </div>
   <div class="chg-filters" id="chg-filters">
     <button class="chg-fil on" data-f="all">همه</button>
@@ -1504,7 +1506,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
       </div>
       <div class="srv-tiles">
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-route"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پورت پیش‌فرض</div><div class="srv-tile-val">443 (TLS) · قابل تغییر در هر کانفیگ</div></div></div>
-        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v9.9</div></div></div>
+        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v__VERSION__</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-brand-fastapi"></i></div><div class="srv-tile-text"><div class="srv-tile-label">فریم‌ورک</div><div class="srv-tile-val">FastAPI + Uvicorn</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-cloud"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پلتفرم</div><div class="srv-tile-val">Railway</div></div></div>
         <div class="srv-tile" style="grid-column:1/-1"><div class="srv-tile-icon"><i class="ti ti-device-floppy"></i></div><div class="srv-tile-text"><div class="srv-tile-label">ذخیره‌سازی</div><div class="srv-tile-val">JSON File (/data)</div></div></div>
@@ -1866,6 +1868,49 @@ function navTo(name){
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.14',date:'۱۴۰۵/۰۵',title:'جستجوی لحظه‌ای و پنل‌های مدیریتی جدید',items:[
+    {t:'new',x:'جستجوی لحظه‌ای کانفیگ‌ها: نام، UUID، پروتکل، پورت، SNI، دامنه، لوکیشن و وضعیت'},
+    {t:'new',x:'جستجوی لحظه‌ای گروه‌های ساب بر اساس نام، توضیح و کلید عمومی'},
+    {t:'new',x:'پشتیبانی از اعداد فارسی/عربی و حروف ی/ک در جستجو'},
+    {t:'new',x:'پنل کامل برندینگ صفحه مشتری با دکمه پیش‌نمایش'},
+    {t:'new',x:'پنل بکاپ: بکاپ فوری، دانلود فایل، بازیابی و تاریخچه'},
+    {t:'new',x:'پنل WARP: تنظیم پروکسی، لیست دامنه‌ها، تست اتصال و آمار زنده'},
+    {t:'fix',x:'نسخهٔ نمایش‌داده‌شده در پنل حالا از version.py خوانده می‌شود و همیشه به‌روز است'},
+  ]},
+  {v:'v9.13',date:'۱۴۰۵/۰۵',title:'بکاپ خودکار تلگرام و خروجی کلودفلر WARP (از Nyx Panel)',items:[
+    {t:'new',x:'ارسال خودکار بکاپ دیتابیس به تلگرام ادمین با کد اعتبارسنجی SHA-256'},
+    {t:'new',x:'بازیابی ۱-کلیک: کافی است همان فایل را دوباره برای ربات بفرستید'},
+    {t:'new',x:'نسخهٔ ایمنی خودکار از وضعیت فعلی قبل از هر بازیابی'},
+    {t:'new',x:'دانلود مستقیم فایل بکاپ از داخل پنل'},
+    {t:'new',x:'خروجی کلودفلر WARP برای رفع تحریم OpenAI، Claude، Netflix و Spotify'},
+    {t:'new',x:'پشتیبانی از پروکسی SOCKS5 و HTTP با حالت «فقط دامنه‌های لیست» یا «همه ترافیک»'},
+    {t:'imp',x:'رفتار fail-open: خرابی WARP هرگز سرویس کاربران را قطع نمی‌کند'},
+  ]},
+  {v:'v9.12',date:'۱۴۰۵/۰۵',title:'برندینگ کامل صفحه ساب مشتری (از Nyx Panel)',items:[
+    {t:'new',x:'صفحه اختصاصی هر مشتری در آدرس /subinfo/{uuid} بدون نیاز به ورود'},
+    {t:'new',x:'نام فروشگاه، لوگو و رنگ اصلی قابل تنظیم'},
+    {t:'new',x:'دکمه‌های مستقیم پشتیبانی تلگرام و تمدید اشتراک'},
+    {t:'new',x:'کادر اعلان به مشتریان و متن فوتر اختصاصی'},
+    {t:'new',x:'باکس دانلود ۱-کلیک: v2rayNG، Streisand، v2rayN و Hiddify'},
+    {t:'imp',x:'نمایش زنده حجم مصرفی، انقضا، لوکیشن و تعداد اتصال به همراه QR'},
+  ]},
+  {v:'v9.11',date:'۱۴۰۵/۰۵',title:'پروتکل Trojan و پکت فرگمنت (از Nyx Panel)',items:[
+    {t:'new',x:'پروتکل Trojan روی ترابرد WebSocket با رلهٔ کامل استاندارد trojan-gfw'},
+    {t:'new',x:'احراز هویت SHA-224 با مقایسه زمان‌ثابت و پشتیبانی IPv4/IPv6/Domain'},
+    {t:'new',x:'تنظیم پکت فرگمنت با پریست همراه اول (۱۰۰-۲۰۰ / ۱۰-۲۰)'},
+    {t:'new',x:'پریست ایرانسل (۵۰-۱۵۰ / ۵-۱۵) و اینترانت (۱۰-۶۰ / ۲-۱۰)'},
+    {t:'new',x:'حالت دستی فرگمنت با اعتبارسنجی کامل مقادیر'},
+    {t:'new',x:'API جدید /api/fragment/presets و /api/protocols'},
+  ]},
+  {v:'v9.10',date:'۱۴۰۵/۰۵',title:'موتور مسیریابی چندگانه کوانتومی (از Nyx Panel v2.3.0)',items:[
+    {t:'new',x:'پایش موازی ۴ مسیر مستقل هر ۱۵ ثانیه با امتیازدهی ۰ تا ۱۰۰'},
+    {t:'new',x:'مسیرها: TLS مستقیم، CDN داخلی ایران، تونل DNS پورت ۵۳ و پینگ ICMP'},
+    {t:'new',x:'حالت اضطراری (Panic Mode) با منطق Hysteresis برای جلوگیری از آلارم کاذب'},
+    {t:'new',x:'هشدار تلگرام هنگام قطعی کامل و پیام بازیابی با مدت دقیق قطعی'},
+    {t:'new',x:'لودبالانسر هوشمند: سالم‌ترین سرور همیشه در ردیف اول سابسکریپشن'},
+    {t:'new',x:'داشبورد زنده ۴ مسیر با دکمه تست اجباری (Force Recheck)'},
+    {t:'new',x:'API جدید /api/multipath و /api/load-balancer'},
+  ]},
   {v:'v9.9',date:'۱۴۰۵/۰۵',title:'سامانه هوشمند سوئیچ خودکار SNI (از Nyx Panel)',items:[
     {t:'new',x:'دیمون Auto-Failover: پایش زنده TLS دامنه‌های SNI کانفیگ‌ها هر ۶۰ ثانیه و سوئیچ خودکار به لیست سفید در زمان فیلتر شدن'},
     {t:'new',x:'فیلد SNI اختصاصی برای هر کانفیگ + SNI پیش‌فرض سراسری در تنظیمات'},
@@ -3104,8 +3149,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
 
 # جایگزینی نهایی لوگو در صفحات استاتیک (LOGIN_HTML / DASHBOARD_HTML)
-LOGIN_HTML = LOGIN_HTML.replace("__LOGO_B64__", LOGO_B64)
-DASHBOARD_HTML = DASHBOARD_HTML.replace("__LOGO_B64__", LOGO_B64)
+LOGIN_HTML = LOGIN_HTML.replace("__LOGO_B64__", LOGO_B64).replace("__VERSION__", VERSION)
+DASHBOARD_HTML = DASHBOARD_HTML.replace("__LOGO_B64__", LOGO_B64).replace("__VERSION__", VERSION)
 
 def get_public_page_html(uuid_key: str) -> str:
     """صفحه پابلیک ساب v3 — طراحی حرفه‌ای‌تر: لینک کانفیگ پنهان با دکمه نمایش، صفحه‌ی رمز با طراحی ویژه"""
@@ -3307,7 +3352,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div class="top">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,{LOGO_B64}" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.9</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v{VERSION}</div></div>
     </div>
     <div class="top-actions">
       <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="تغییر تم"><i class="ti ti-sun" id="theme-icon"></i></button>
@@ -3317,7 +3362,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div id="root">
     <div class="empty-state"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>در حال بارگذاری...</div>
   </div>
-  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.9</div>
+  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v{VERSION}</div>
 </div>
 <script>
 const UUID_KEY='{uuid_key}';

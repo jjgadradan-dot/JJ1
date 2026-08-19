@@ -22,8 +22,8 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
-BRAND = "XR"
-VERSION = "9.14"
+# نسخه و برند از version.py خوانده می‌شوند تا پنل وب و بک‌اند همیشه هم‌خوان بمانند
+from version import BRAND, VERSION
 
 logger = logging.getLogger(BRAND)
 
