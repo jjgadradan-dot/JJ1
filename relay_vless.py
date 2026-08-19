@@ -49,8 +49,8 @@ from speed_limit import throttle
 # VLESS Relay — بهینه‌شده برای حداکثر throughput
 # ══════════════════════════════════════════════════════════════════════════════
 
-RELAY_BUF = int(os.environ.get("RELAY_BUF", str(1024 * 1024)))   # 1 MB buffer
-SOCK_BUF_SIZE = 4 * 1024 * 1024                                  # SO_SNDBUF / SO_RCVBUF
+RELAY_BUF = int(os.environ.get("RELAY_BUF", str(2 * 1024 * 1024)))   # 2 MB buffer
+SOCK_BUF_SIZE = 8 * 1024 * 1024                                  # SO_SNDBUF / SO_RCVBUF
 
 # ══════════════════════════════════════════════════════════════════════════════
 # حسابداری مصرف — بدون قفل، با فلاش دسته‌ای هر ۱ ثانیه

@@ -7,6 +7,7 @@
 # ══════════════════════════════════════════════════════════════════════════════
 
 import asyncio
+import os
 import secrets
 import socket
 import time
@@ -32,25 +33,29 @@ from speed_limit import throttle
 
 router = APIRouter()
 
-XHTTP_BUF = 1024 * 1024
-DOWNLINK_QUEUE_MAX = 512
+XHTTP_BUF = 2 * 1024 * 1024
+DOWNLINK_QUEUE_MAX = 1024
 SESSION_IDLE_TIMEOUT = 30
 REAPER_INTERVAL = 10
 TCP_CONNECT_TIMEOUT = 10.0
 
+# ⚡ حد بافر داخلی StreamReader اتصال TCP (پیش‌فرض asyncio فقط 64KB) — برای
+#    چانک‌های بزرگ‌تر و backpressure کمتر.
+STREAM_LIMIT = int(os.environ.get("STREAM_LIMIT", str(2 * 1024 * 1024)))
+
 # ── تنظیمات موتور تطبیقی ──────────────────────────────────────────────────────
-SOCK_BUF_SIZE = 4 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
+SOCK_BUF_SIZE = 8 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
 
 # _AdaptiveFlow: بازه‌ی مجاز برای high-water تطبیقی (AIMD)
 FLOW_MIN_HW = 256 * 1024
-FLOW_MAX_HW = 32 * 1024 * 1024
-FLOW_START_HW = 2 * 1024 * 1024
+FLOW_MAX_HW = 64 * 1024 * 1024
+FLOW_START_HW = 4 * 1024 * 1024
 FLOW_FAST_DRAIN_MS = 2.0    # زیر این یعنی downstream خیلی سریعه → بافر مجاز رو زیاد کن
 FLOW_SLOW_DRAIN_MS = 25.0   # بالای این یعنی backpressure واقعی → فوری نصفش کن
 
 # _QuotaGate: بازه‌ی مجاز برای batch تطبیقی چک کوتا
 QUOTA_MIN_BATCH = 32 * 1024
-QUOTA_MAX_BATCH = 2 * 1024 * 1024
+QUOTA_MAX_BATCH = 4 * 1024 * 1024
 QUOTA_START_BATCH = 64 * 1024
 QUOTA_CHECK_INTERVAL = 0.2  # سقف زمانی؛ حتی اگر batch پر نشده، بعد این مدت چک کن
 
@@ -187,7 +192,7 @@ def _req_client_ip(request: Request) -> str:
 async def _open_tcp_from_header(first_chunk: bytes):
     command, address, port, payload = await parse_vless_header(first_chunk)
     reader, writer = await asyncio.wait_for(
-        asyncio.open_connection(address, port), timeout=TCP_CONNECT_TIMEOUT
+        asyncio.open_connection(address, port, limit=STREAM_LIMIT), timeout=TCP_CONNECT_TIMEOUT
     )
     _tune_socket(writer)
     if payload:

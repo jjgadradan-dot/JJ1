@@ -1960,6 +1960,16 @@ function navTo(name){
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.17',date:'۱۴۰۵/۰۵',title:'سرعت فضایی 🚀 — موتور حداکثری uvloop و بافرهای غول‌پیکر',items:[
+    {t:'new',x:'فعال‌سازی صریح uvloop (حلقه رویداد C-محور) و httptools (پارسر HTTP فوق‌سریع) — چند برابر شدن توان عملیاتی حلقه'},
+    {t:'new',x:'فعال‌سازی HTTP/2 برای کلاینت داخلی و پراکسی (multiplexing و اتصال‌های ماندگار)'},
+    {t:'imp',x:'حد بافر StreamReader اتصال‌های TCP از ۶۴KB به ۲MB — چانک‌های بزرگ‌تر و backpressure کمتر'},
+    {t:'imp',x:'بافر رله VLESS/Trojan به ۲MB و بافر XHTTP به ۲MB؛ سوکت TCP به ۸MB'},
+    {t:'imp',x:'high-water جریان تا ۶۴MB و batch کوتای تطبیقی تا ۴MB برای دانلودهای فوق‌حجیم'},
+    {t:'imp',x:'پراکسی HTTP حالا استریمینگ است (بدون بافر کردن کل پاسخ در حافظه — لتنسی و حافظهٔ کمتر)'},
+    {t:'imp',x:'حذف لاگ دسترسی هر درخواست (سربار ترابرد XHTTP که هر چانک یک درخواست است) و بک‌لاگ اتصال ۸۱۹۲'},
+    {t:'imp',x:'سقف فریم WebSocket به ۶۴MB برای آپلینک‌های بسیار حجیم'},
+  ]},
   {v:'v9.16',date:'۱۴۰۵/۰۵',title:'افزایش چشمگیر سرعت تونل (بافرها و تیونینگ سوکت)',items:[
     {t:'imp',x:'بافر رله VLESS/Trojan از ۲۵۶KB به ۱MB و بافر XHTTP از ۵۱۲KB به ۱MB — سربار هر چانک و تعداد syscall‌ها به‌شدت کم شد'},
     {t:'imp',x:'بافر سوکت TCP از ۲MB به ۴MB + فعال‌سازی TCP_QUICKACK و SO_KEEPALIVE — کاهش تأخیر ACK و جلوگیری از استال BDP در پینگ‌های بالا'},

@@ -1,3 +1,13 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# اجرای مستقیم (python main.py): این ماژول را با نام «main» هم در sys.modules
+# ثبت می‌کنیم تا ایمپورت‌های چرخه‌ای (auto_failover، multipath و...) به‌جای
+# اجرای دوبارهٔ کل فایل، از همین ماژولِ در حال اجرا استفاده کنند. وقتی برنامه
+# با «uvicorn main:app» اجرا شود این بلوک کاملاً بی‌اثر است.
+# ══════════════════════════════════════════════════════════════════════════════
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
+    import sys as _sys
+    _sys.modules.setdefault("main", _sys.modules["__main__"])
+
 import asyncio
 import json
 import os
@@ -12,7 +22,7 @@ from collections import deque, defaultdict
 from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends
-from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import httpx
@@ -407,10 +417,10 @@ async def require_node_api(request: Request):
 @app.on_event("startup")
 async def startup():
     global http_client
-    limits = httpx.Limits(max_connections=500, max_keepalive_connections=100)
+    limits = httpx.Limits(max_connections=1000, max_keepalive_connections=200, keepalive_expiry=30.0)
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.AsyncClient(
-        limits=limits, timeout=timeout, follow_redirects=True,
+        limits=limits, timeout=timeout, follow_redirects=True, http2=True,
     )
     await load_state()
     await ensure_node_api_token()
@@ -2302,12 +2312,28 @@ async def http_proxy(target_url: str, request: Request):
     try:
         body = await request.body()
         headers = {k: v for k, v in request.headers.items() if k.lower() not in _HOP and k.lower() != "host"}
-        resp = await http_client.request(method=request.method, url=target_url, headers=headers, content=body)
-        stats["total_bytes"] += len(resp.content)
+        # ⚡ استریمینگ کامل: به‌جای بافر کردن کل بدنهٔ پاسخ در حافظه، چانک‌به‌چانک
+        #    از مبدأ خوانده و برای کلاینت ارسال می‌شود (لتنسی کمتر + حافظهٔ ثابت).
+        req = http_client.build_request(method=request.method, url=target_url, headers=headers, content=body)
+        resp = await http_client.send(req, stream=True)
         stats["total_requests"] += 1
-        hourly_traffic[now_ir().strftime("%H:00")] += len(resp.content)
-        return Response(content=resp.content, status_code=resp.status_code,
-                        headers={k: v for k, v in resp.headers.items() if k.lower() not in _HOP})
+        resp_headers = {k: v for k, v in resp.headers.items() if k.lower() not in _HOP}
+
+        async def stream_body():
+            n = 0
+            try:
+                async for chunk in resp.aiter_bytes(256 * 1024):
+                    n += len(chunk)
+                    yield chunk
+            finally:
+                try:
+                    await resp.aclose()
+                except Exception:
+                    pass
+                stats["total_bytes"] += n
+                hourly_traffic[now_ir().strftime("%H:00")] += n
+
+        return StreamingResponse(stream_body(), status_code=resp.status_code, headers=resp_headers)
     except Exception as exc:
         stats["total_errors"] += 1
         error_logs.append({"error": str(exc), "url": target_url, "time": datetime.now().isoformat()})
@@ -2402,14 +2428,25 @@ async def test_ws_redirect():
     return HTMLResponse(content="<script>location.href='/dashboard'</script>")
 
 if __name__ == "__main__":
-    # ⚡ ws_max_size: پذیرش فریم‌های باینری بزرگ‌تر از سمت کلاینت (آپلینک حجیم)
-    #    بدون افت توان عملیاتی؛ backlog بالاتر برای جذب بهتر ترافیک هم‌زمان.
+    # ⚡ موتور حداکثر سرعت:
+    #   - loop="uvloop": حلقهٔ رویداد C-محور (تا چند برابر سریع‌تر از asyncio خالص)
+    #   - http="httptools": پارسر HTTP فوق‌سریع C-محور (به‌جای h11 خالص)
+    #   - access_log=False: حذف لاگ هر درخواست (برای ترابرد XHTTP که هر چانک یک
+    #     درخواست HTTP است، سربار قابل‌توجهی دارد)
+    #   - ws_max_size=64MB: پذیرش فریم‌های باینری بسیار بزرگ بدون خرد شدن
+    #   - backlog=8192: جذب بهتر انفجار اتصال‌های هم‌زمان
+    #   - workers=1: چون وضعیت (کانفیگ‌ها/اتصال‌ها) درون‌پروسه است، چند پردازه
+    #     باعث از دست رفتن حسابداری مشترک می‌شود؛ با uvloop تک‌پردازه هم کافی است.
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=CONFIG["port"],
         log_level="info",
+        loop="uvloop",
+        http="httptools",
+        ws="websockets",
+        access_log=False,
         workers=1,
-        ws_max_size=32 * 1024 * 1024,
-        backlog=4096,
+        ws_max_size=64 * 1024 * 1024,
+        backlog=8192,
     )
