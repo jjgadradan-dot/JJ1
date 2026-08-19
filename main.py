@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.7"
+VERSION = "9.9"
 
 logger = logging.getLogger(BRAND)
 
@@ -64,6 +64,20 @@ CONFIG = {
     "port": int(os.environ.get("PORT", 8000)),
     "secret": _load_or_create_secret(),
     "host": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost"),
+    # دامنه اختصاصی / CDN (مثل قابلیت CUSTOM_DOMAIN در Nyx Panel): وقتی تنظیم شود،
+    # همه کانفیگ‌ها، لینک‌های ساب و URLهای عمومی با این دامنه ساخته می‌شوند
+    # به‌جای IP/دامنه خود سرور. مقدار اولیه از متغیر محیطی CDN_DOMAIN خوانده می‌شود.
+    "cdn_domain": os.environ.get("CDN_DOMAIN", "").strip(),
+    # سامانه هوشمند سوئیچ خودکار SNI (Smart Auto-Failover Daemon از Nyx Panel):
+    # هر ۶۰ ثانیه SNI کانفیگ‌های فعال را زنده تست می‌کند و در صورت مسدودی،
+    # خودکار به یک SNI سفید سالم سوئیچ می‌کند (بدون تغییر لینک کاربران).
+    "auto_failover": {
+        "enabled": os.environ.get("AUTO_FAILOVER_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+        "interval": max(10, int(os.environ.get("AUTO_FAILOVER_INTERVAL", "60") or 60)),
+        # SNI پیش‌فرض برای همه کانفیگ‌ها (خالی = هاست سرور). این SNI ها توسط دیمون
+        # پایش و در صورت مسدودی خودکار به دامنهٔ سالم لیست سفید سوئیچ می‌شوند.
+        "default_sni": os.environ.get("AUTO_FAILOVER_SNI", "").strip(),
+    },
 }
 
 app.add_middleware(
@@ -91,6 +105,21 @@ async def load_state():
                 MASTER.update(data["master"])
             if "password_hash" in data:
                 AUTH["password_hash"] = data["password_hash"]
+            cdn = data.get("cdn_domain")
+            if cdn:
+                CONFIG["cdn_domain"] = str(cdn).strip()
+            af = data.get("auto_failover")
+            if isinstance(af, dict):
+                cur = CONFIG.setdefault("auto_failover", {})
+                if "enabled" in af:
+                    cur["enabled"] = bool(af["enabled"])
+                if "interval" in af:
+                    try:
+                        cur["interval"] = max(10, int(af["interval"]))
+                    except (TypeError, ValueError):
+                        pass
+                if "default_sni" in af:
+                    cur["default_sni"] = str(af["default_sni"] or "").strip()
             logger.info(f"State loaded: {len(LINKS)} links, {len(SUBS)} subs")
     except Exception as e:
         logger.warning(f"Could not load state: {e}")
@@ -106,6 +135,8 @@ async def save_state():
                 "node_api": dict(NODE_API),
                 "master": dict(MASTER),
                 "password_hash": AUTH["password_hash"],
+                "cdn_domain": CONFIG.get("cdn_domain", ""),
+                "auto_failover": dict(CONFIG.get("auto_failover", {})),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -326,12 +357,15 @@ async def startup():
     await _tg_start_bot()
     global _heartbeat_task
     _heartbeat_task = asyncio.create_task(_master_heartbeat_loop())
+    # دیمون سوئیچ خودکار SNI (Smart Auto-Failover از Nyx Panel)
+    auto_failover_manager.apply_settings()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"{BRAND} v{VERSION} started on port {CONFIG['port']} (node mode)")
 
 @app.on_event("shutdown")
 async def shutdown():
     global _heartbeat_task
+    auto_failover_manager.stop()
     if _heartbeat_task:
         _heartbeat_task.cancel()
         try:
@@ -345,11 +379,42 @@ async def shutdown():
         await http_client.aclose()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def clean_cdn_domain(raw: str) -> str:
+    """پاک‌سازی دامنه اختصاصی/CDN دریافتی از کاربر یا متغیر محیطی.
+
+    مثل قابلیت CUSTOM_DOMAIN در Nyx Panel عمل می‌کند: پروتکل (http/https)،
+    مسیر، کوئری و فضای خالی حذف می‌شود تا فقط «دامنه:پورت» بماند.
+    """
+    d = (raw or "").strip()
+    if not d:
+        return ""
+    low = d.lower()
+    if low.startswith("https://"):
+        d = d[8:]
+    elif low.startswith("http://"):
+        d = d[7:]
+    for sep in ("/", "?", "#"):
+        if sep in d:
+            d = d.split(sep)[0]
+    return d.strip()
+
+def current_cdn_domain() -> str:
+    """دامنه CDN سراسری فعال (خالی = غیرفعال)."""
+    return (CONFIG.get("cdn_domain") or "").strip()
+
 def get_host(request: Request | None = None) -> str:
     """آدرس دامنه رو ترجیحاً از خودِ درخواست HTTP می‌گیره (هدر Host/X-Forwarded-Host)
     چون این همیشه دقیقاً همون دامنه‌ایه که کاربر واقعاً بهش وصل شده. متغیر محیطی
     RAILWAY_PUBLIC_DOMAIN فقط به‌عنوان fallback استفاده می‌شه، چون گاهی موقع بالا اومدن
-    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن."""
+    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن.
+
+    اگر دامنه اختصاصی/CDN سراسری تنظیم شده باشد (از تنظیمات پنل یا متغیر CDN_DOMAIN)،
+    اولویت با همان است: همه کانفیگ‌ها و لینک‌های ساب با دامنه CDN ساخته می‌شوند
+    (مثل CUSTOM_DOMAIN در Nyx Panel).
+    """
+    cdn = current_cdn_domain()
+    if cdn:
+        return cdn
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
@@ -373,9 +438,12 @@ def generate_vless_link(
     fingerprint: str | None = None,
     alpn: str | None = None,
     port: int | None = None,
+    sni: str | None = None,
 ) -> str:
     """می‌سازد VLESS share-link متناسب با پروتکل انتخاب‌شده (WS کلاسیک یا یکی از مدهای XHTTP).
-    fingerprint / alpn / port در صورت ندادن، از پیش‌فرض‌های خود پروتکل استفاده می‌شوند."""
+    fingerprint / alpn / port در صورت ندادن، از پیش‌فرض‌های خود پروتکل استفاده می‌شوند.
+    sni در صورت ندادن، برابر host است؛ اگر مقدارش بدهید (مثل دامنهٔ لیست سفید در
+    Auto-Failover)، همان در پارامتر sni لینک می‌آید در حالی که آدرس اتصال همان host می‌ماند."""
     fp = (fingerprint or DEFAULT_FINGERPRINT).strip() or DEFAULT_FINGERPRINT
     if fp not in FINGERPRINTS:
         fp = DEFAULT_FINGERPRINT
@@ -383,6 +451,7 @@ def generate_vless_link(
     port_val = port or DEFAULT_PORT
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
+    sni_val = (sni or "").strip() or host
 
     if protocol == "vless-ws":
         path = f"/ws/{uuid}"
@@ -392,7 +461,7 @@ def generate_vless_link(
             "type": "ws",
             "host": host,
             "path": path,
-            "sni": host,
+            "sni": sni_val,
             "fp": fp,
             "alpn": alpn_val,
         }
@@ -407,7 +476,7 @@ def generate_vless_link(
             "mode": mode,
             "host": host,
             "path": path,
-            "sni": host,
+            "sni": sni_val,
             "fp": fp,
             "alpn": alpn_val,
         }
@@ -415,15 +484,22 @@ def generate_vless_link(
     return f"vless://{uuid}@{host}:{port_val}?{query}#{quote(remark)}"
 
 def vless_link_for_link(link: dict, uid: str, host: str) -> str:
-    """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه."""
+    """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه.
+    اگر برای همون کانفیگ دامنه CDN اختصاصی (cdn_host) تنظیم شده باشد، اون اولویت دارد.
+    SNI: مقدار اختصاصی کانفیگ (sni) → SNI پیش‌فرض سراسری Auto-Failover → host."""
     proto = link.get("protocol", DEFAULT_PROTOCOL)
+    eff_host = (link.get("cdn_host") or "").strip() or host
+    sni = (link.get("sni") or "").strip()
+    if not sni:
+        sni = CONFIG.get("auto_failover", {}).get("default_sni") or ""
     return generate_vless_link(
-        uid, host,
+        uid, eff_host,
         remark=str(link.get("label") or "").strip(),
         protocol=proto,
         fingerprint=link.get("fingerprint"),
         alpn=link.get("alpn"),
         port=link.get("port"),
+        sni=sni,
     )
 
 def uptime() -> str:
@@ -764,6 +840,75 @@ async def api_change_password(request: Request, token=Depends(require_auth)):
     log_activity("auth", "رمز عبور پنل تغییر کرد", "ok")
     return {"ok": True}
 
+# ── CDN Custom Domain (از Nyx Panel) ─────────────────────────────────────────
+@app.get("/api/cdn-domain")
+async def api_get_cdn_domain(_=Depends(require_auth)):
+    cdn = current_cdn_domain()
+    return {"ok": True, "cdn_domain": cdn, "active": bool(cdn)}
+
+@app.post("/api/cdn-domain")
+async def api_set_cdn_domain(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    clean = clean_cdn_domain(body.get("domain") or "")
+    CONFIG["cdn_domain"] = clean
+    await save_state()
+    if clean:
+        log_activity("settings", f"دامنه اختصاصی / CDN فعال شد: {clean}", "ok")
+    else:
+        log_activity("settings", "دامنه اختصاصی / CDN غیرفعال شد (برگشت به حالت پیش‌فرض)", "warn")
+    return {"ok": True, "cdn_domain": clean, "active": bool(clean)}
+
+@app.delete("/api/cdn-domain")
+async def api_clear_cdn_domain(_=Depends(require_auth)):
+    was_active = bool(current_cdn_domain())
+    CONFIG["cdn_domain"] = ""
+    await save_state()
+    if was_active:
+        log_activity("settings", "دامنه اختصاصی / CDN غیرفعال شد (برگشت به حالت پیش‌فرض)", "warn")
+    return {"ok": True, "cdn_domain": "", "active": False}
+
+# ── Smart Auto-Failover SNI Daemon (از Nyx Panel) ────────────────────────────
+@app.get("/api/auto-failover/status")
+async def api_auto_failover_status(_=Depends(require_auth)):
+    return {"ok": True, **auto_failover_manager.get_status()}
+
+@app.post("/api/auto-failover/trigger")
+async def api_auto_failover_trigger(_=Depends(require_auth)):
+    """پایش و سوئیچ آنی SNI (معادل دکمهٔ دستی در Nyx)."""
+    result = await auto_failover_manager.check_and_failover()
+    return {"ok": True, **result}
+
+@app.post("/api/auto-failover/config")
+async def api_auto_failover_config(request: Request, _=Depends(require_auth)):
+    """فعال/غیرفعال‌سازی دیمون و تنظیم SNI پیش‌فرض سراسری."""
+    body = await request.json()
+    af = CONFIG.setdefault("auto_failover", {})
+    changed = False
+    if "enabled" in body:
+        af["enabled"] = bool(body["enabled"])
+        changed = True
+    if "interval" in body:
+        try:
+            new_interval = max(10, int(body["interval"]))
+            if new_interval != af.get("interval"):
+                af["interval"] = new_interval
+                changed = True
+        except (TypeError, ValueError):
+            pass
+    if "default_sni" in body:
+        clean = clean_cdn_domain(body.get("default_sni") or "")
+        if clean != af.get("default_sni", ""):
+            af["default_sni"] = clean
+            changed = True
+    await save_state()
+    if changed:
+        if af.get("enabled", True):
+            log_activity("settings", "دیمون سوئیچ خودکار SNI فعال شد", "ok")
+        else:
+            log_activity("settings", "دیمون سوئیچ خودکار SNI غیرفعال شد", "warn")
+    auto_failover_manager.apply_settings()
+    return {"ok": True, **auto_failover_manager.get_status()}
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
 async def get_stats(_=Depends(require_auth)):
@@ -865,6 +1010,8 @@ async def make_link(
     ip_limit: int = 0,
     speed_limit_bytes: int = 0,
     location: str = "",
+    cdn_host: str = "",
+    sni: str = "",
 ) -> tuple[str, dict]:
     if protocol not in PROTOCOLS:
         protocol = DEFAULT_PROTOCOL
@@ -892,6 +1039,8 @@ async def make_link(
             "ip_limit": max(0, ip_limit),
             "speed_limit_bytes": max(0, speed_limit_bytes),
             "location": (location or "").strip()[:60],
+            "cdn_host": clean_cdn_domain(cdn_host),
+            "sni": (sni or "").strip()[:100],
         }
     if sub_id:
         async with SUBS_LOCK:
@@ -1026,6 +1175,8 @@ async def create_link(request: Request, _=Depends(require_auth)):
         ip_limit=ip_limit,
         speed_limit_bytes=speed_limit_bytes,
         location=body.get("location") or "",
+        cdn_host=body.get("cdn_host") or "",
+        sni=body.get("sni") or "",
     )
 
     host = get_host(request)
@@ -1108,7 +1259,11 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["speed_limit_bytes"] = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
             from speed_limit import reset_bucket
             reset_bucket(uid)
-        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
+        if "cdn_host" in body:
+            link["cdn_host"] = clean_cdn_domain(body.get("cdn_host") or "")
+        if "sni" in body:
+            link["sni"] = (body.get("sni") or "").strip()[:100]
+        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host", "sni")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -1348,6 +1503,8 @@ def serialize_node_config(uid: str, link: dict, host: str) -> dict:
         "expires_at": link.get("expires_at"),
         "note": link.get("note") or "",
         "location": link.get("location") or "",
+        "cdn_host": link.get("cdn_host") or "",
+        "sni": link.get("sni") or "",
         "created_at": link.get("created_at"),
         "is_default": bool(link.get("is_default")),
         "vless_link": vless_link_for_link(link, uid, host),
@@ -1401,6 +1558,8 @@ async def node_create_from_body(body: dict, request: Request) -> dict:
         ip_limit=max(0, int(body.get("ip_limit", 0) or 0)),
         speed_limit_bytes=speed_limit_bytes,
         location=body.get("location") or "",
+        cdn_host=body.get("cdn_host") or "",
+        sni=body.get("sni") or "",
     )
     return serialize_node_config(uid, link, get_host(request))
 
@@ -1723,6 +1882,12 @@ async def node_api_subs(request: Request, _=Depends(require_node_api)):
             "sub_url": f"https://{host}/sub-group/{s['uuid_key']}",
         })
     return {"subs": result}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Smart Auto-Failover SNI Daemon — پورت‌شده از Nyx Panel
+# ══════════════════════════════════════════════════════════════════════════════
+
+from auto_failover import auto_failover_manager, test_sni_domain, FALLBACK_SNI_POOL
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VLESS Relay — جدا شده به relay_vless.py (دست نخورده)

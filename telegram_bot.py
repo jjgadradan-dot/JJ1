@@ -143,12 +143,31 @@ async def _answer_cb(cb_id: str, text: str = ""):
 def _is_admin(chat_id: int) -> bool:
     return chat_id in ADMIN_IDS
 
+async def send_admin_notification(text: str) -> int:
+    """ارسال پیام به همه ادمین‌های مجاز (مثل sendAdminNotification در Nyx Panel).
+
+    برای هشدارهای خودکار مثل سوئیچ SNI توسط دیمون Auto-Failover استفاده می‌شود.
+    اگر ربات غیرفعال باشد یا ادمینی تعریف نشده باشد، بی‌صدا برمی‌گردد.
+    """
+    if _client is None or not ADMIN_IDS:
+        return 0
+    sent = 0
+    for cid in ADMIN_IDS:
+        try:
+            res = await _send(cid, text)
+            if res and res.get("ok"):
+                sent += 1
+        except Exception as e:
+            logger.warning(f"Telegram send_admin_notification -> {cid} failed: {e}")
+    return sent
+
 # ── Keyboards ────────────────────────────────────────────────────────────────
 def _main_menu_kb():
     return {"inline_keyboard": [
         [{"text": "📋 لیست کانفیگ‌ها", "callback_data": "list:0"}],
         [{"text": "➕ ساخت کانفیگ جدید", "callback_data": "newcfg"}],
         [{"text": "🗂 گروه‌های ساب (لینک حرفه‌ای)", "callback_data": "subs:0"}],
+        [{"text": "🛡️ سوئیچ خودکار SNI", "callback_data": "autofailover"}],
         [{"text": "🔄 رفرش", "callback_data": "menu"}],
     ]}
 
@@ -527,6 +546,32 @@ async def _handle_callback(cb: dict):
     if data == "menu":
         _pending.pop(chat_id, None)
         await _edit(chat_id, message_id, "منوی مدیریت XR:", _main_menu_kb())
+        return
+
+    if data == "autofailover":
+        # دکمهٔ «سوئیچ خودکار SNI» — مثل دکمهٔ Auto-Failover در ربات Nyx
+        try:
+            from auto_failover import auto_failover_manager
+            await _edit(chat_id, message_id, "⏳ در حال پایش و تست اتصال TLS دامنه‌ها... چند ثانیه شکیبا باشید...")
+            result = await auto_failover_manager.check_and_failover()
+            checked = result.get("checked_count", 0)
+            switched = result.get("switched_count", 0)
+            msg = (
+                "✅ <b>گزارش سوئیچ هوشمند و پایش SNI (Auto-Failover):</b>\n\n"
+                f"🔹 کانفیگ‌های بررسی‌شده: {checked}\n"
+                f"⚡ سوئیچ‌های انجام‌شده: {switched}\n\n"
+            )
+            if switched == 0:
+                msg += "🟢 تمام دامنه‌های SNI فعال، باثبات و سالم هستند! نیازی به سوئیچ نبود."
+            else:
+                msg += "⚠️ <b>جزئیات سوئیچ هوشمند:</b>\n"
+                for ev in result.get("events", []):
+                    who = ", ".join(ev.get("labels") or ev.get("links") or [])
+                    msg += f"• {who}: {ev['old_sni']} ➡️ <code>{ev['new_sni']}</code> ({ev['latency_ms']}ms)\n"
+            await _edit(chat_id, message_id, msg, _main_menu_kb())
+        except Exception as e:
+            logger.warning(f"Auto-Failover bot trigger error: {e}")
+            await _edit(chat_id, message_id, "❌ خطا در اجرای سوئیچ هوشمند SNI.", _main_menu_kb())
         return
 
     if data.startswith("list:"):
