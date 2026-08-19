@@ -254,9 +254,11 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
         connections[conn_id]["bytes"] += len(first_chunk)
         logger.info(f"➡️  Trojan [{conn_id}] → {address}:{port}")
 
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(address, port), timeout=10.0
-        )
+        # 🌐 در صورت فعال بودن WARP و تطابق مقصد، از خروجی کلودفلر عبور می‌کند
+        from warp_service import warp_manager
+        (reader, writer), via_warp = await warp_manager.open_connection(address, port, timeout=10.0)
+        if via_warp:
+            connections[conn_id]["via"] = "warp"
         sock = writer.transport.get_extra_info("socket")
         if sock:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)

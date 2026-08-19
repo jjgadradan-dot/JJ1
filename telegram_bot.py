@@ -161,6 +161,100 @@ async def send_admin_notification(text: str) -> int:
             logger.warning(f"Telegram send_admin_notification -> {cid} failed: {e}")
     return sent
 
+async def send_admin_document(payload: bytes, filename: str, caption: str = "") -> int:
+    """ارسال یک فایل (مثل بکاپ دیتابیس) به همه ادمین‌های مجاز.
+
+    از multipart/form-data استفاده می‌کند چون sendDocument فایل باینری می‌خواهد.
+    خروجی: تعداد ادمین‌هایی که فایل با موفقیت برایشان ارسال شد.
+    """
+    if _client is None or not ADMIN_IDS:
+        return 0
+    sent = 0
+    for cid in ADMIN_IDS:
+        try:
+            r = await _client.post(
+                f"{API_BASE}/sendDocument",
+                data={"chat_id": str(cid), "caption": caption[:1024], "parse_mode": "HTML"},
+                files={"document": (filename, payload, "application/json")},
+                timeout=120,
+            )
+            if r.json().get("ok"):
+                sent += 1
+            else:
+                logger.warning(f"Telegram sendDocument -> {cid}: {r.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Telegram sendDocument -> {cid} failed: {e}")
+    return sent
+
+
+async def _download_file(file_id: str) -> bytes | None:
+    """دانلود فایل آپلودشده توسط ادمین (برای بازیابی بکاپ)."""
+    if _client is None:
+        return None
+    try:
+        info = await _call("getFile", file_id=file_id)
+        if not info or not info.get("ok"):
+            return None
+        path = info["result"]["file_path"]
+        r = await _client.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}", timeout=120)
+        if r.status_code != 200:
+            return None
+        return r.content
+    except Exception as e:
+        logger.warning(f"Telegram _download_file failed: {e}")
+        return None
+
+
+async def _handle_document(msg: dict):
+    """دریافت فایل بکاپ از ادمین و بازیابی ۱-کلیک (مثل Nyx)."""
+    chat_id = msg.get("chat", {}).get("id")
+    doc = msg.get("document") or {}
+    if chat_id is None:
+        return
+    if not _is_admin(chat_id):
+        await _send(chat_id, "⛔ شما اجازه‌ی دسترسی به این ربات رو ندارید.")
+        return
+
+    name = str(doc.get("file_name") or "")
+    if not name.lower().endswith(".json"):
+        await _send(chat_id, "📎 فقط فایل بکاپ با پسوند <b>.json</b> پذیرفته می‌شود.")
+        return
+    if int(doc.get("file_size") or 0) > 20 * 1024 * 1024:
+        await _send(chat_id, "⚠️ حجم فایل بیش از ۲۰ مگابایت است.")
+        return
+
+    await _send(chat_id, f"⏳ در حال دریافت و بررسی <b>{name}</b>…")
+    raw = await _download_file(doc.get("file_id"))
+    if raw is None:
+        await _send(chat_id, "❌ دانلود فایل از تلگرام ناموفق بود.")
+        return
+
+    try:
+        from backup_service import restore_backup
+        result = await restore_backup(raw)
+    except ValueError as e:
+        await _send(chat_id, f"❌ بازیابی انجام نشد:\n<code>{str(e)[:300]}</code>")
+        return
+    except Exception as e:
+        logger.warning(f"Telegram restore failed: {e}")
+        await _send(chat_id, f"❌ خطای غیرمنتظره در بازیابی:\n<code>{str(e)[:300]}</code>")
+        return
+
+    await _send(
+        chat_id,
+        "✅ <b>بازیابی با موفقیت انجام شد!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 کانفیگ‌ها: <b>{result['links_restored']}</b>\n"
+        f"👥 گروه‌ها: <b>{result['subs_restored']}</b>\n"
+        f"🖥️ نودها: <b>{result['nodes_restored']}</b>\n"
+        f"🔐 اعتبارسنجی SHA-256: <b>{'انجام شد ✅' if result['checksum_verified'] else 'نداشت ⚠️'}</b>\n"
+        f"🔑 رمز پنل: <b>{'بازگردانی شد' if result['password_restored'] else 'دست‌نخورده'}</b>\n"
+        f"📅 تاریخ بکاپ: {result.get('backup_created_at') or '—'}\n\n"
+        "<i>یک نسخهٔ ایمنی از وضعیت قبلی هم ذخیره شد.</i>",
+        _main_menu_kb(),
+    )
+
+
 # ── Keyboards ────────────────────────────────────────────────────────────────
 def _main_menu_kb():
     return {"inline_keyboard": [
@@ -862,7 +956,11 @@ async def _poll_loop():
                 offset = upd["update_id"] + 1
                 try:
                     if "message" in upd:
-                        await _handle_message(upd["message"])
+                        _m = upd["message"]
+                        if _m.get("document"):
+                            await _handle_document(_m)
+                        else:
+                            await _handle_message(_m)
                     elif "callback_query" in upd:
                         await _handle_callback(upd["callback_query"])
                 except Exception as e:

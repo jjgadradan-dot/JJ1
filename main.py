@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.12"
+VERSION = "9.13"
 
 logger = logging.getLogger(BRAND)
 
@@ -94,6 +94,10 @@ CONFIG = {
     # 🎨 شخصی‌سازی صفحه ساب مشتری (Sub Portal Custom Branding از Nyx):
     # نام برند، لوگو، رنگ، دکمه‌های پشتیبانی/تمدید، کادر اعلان و باکس دانلود اپ‌ها.
     "branding": {},
+    # 💾 بکاپ خودکار دیتابیس در تلگرام + بازیابی ۱-کلیک (از Nyx)
+    "backup": {},
+    # 🌐 خروجی کلودفلر WARP برای رفع تحریم OpenAI/Netflix و مخفی‌سازی IP سرور (از Nyx)
+    "warp": {},
 }
 
 app.add_middleware(
@@ -139,6 +143,9 @@ async def load_state():
             br = data.get("branding")
             if isinstance(br, dict):
                 CONFIG["branding"] = br
+            for _key in ("backup", "warp"):
+                if isinstance(data.get(_key), dict):
+                    CONFIG.setdefault(_key, {}).update(data[_key])
             mp = data.get("multipath")
             if isinstance(mp, dict):
                 cur_mp = CONFIG.setdefault("multipath", {})
@@ -174,6 +181,8 @@ async def save_state():
                 "auto_failover": dict(CONFIG.get("auto_failover", {})),
                 "multipath": dict(CONFIG.get("multipath", {})),
                 "branding": dict(CONFIG.get("branding", {})),
+                "backup": dict(CONFIG.get("backup", {})),
+                "warp": dict(CONFIG.get("warp", {})),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -412,6 +421,8 @@ async def startup():
     auto_failover_manager.apply_settings()
     # ⚛️ موتور مسیریابی چندگانه + حالت اضطراری + لودبالانسر هوشمند (Nyx v2.3.0)
     multipath_start_all()
+    # 💾 دیمون بکاپ خودکار تلگرام
+    backup_manager.apply_settings()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"{BRAND} v{VERSION} started on port {CONFIG['port']} (node mode)")
 
@@ -420,6 +431,7 @@ async def shutdown():
     global _heartbeat_task
     auto_failover_manager.stop()
     multipath_stop_all()
+    backup_manager.stop()
     if _heartbeat_task:
         _heartbeat_task.cancel()
         try:
@@ -1136,6 +1148,104 @@ async def api_subinfo(uuid: str, request: Request):
         "sub_url": f"https://{host}/sub/{uuid}",
         "subinfo_url": f"https://{host}/subinfo/{uuid}",
     }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 💾 بکاپ خودکار دیتابیس در تلگرام و بازیابی ۱-کلیک (از Nyx)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/backup/status")
+async def api_backup_status(_=Depends(require_auth)):
+    return {"ok": True, **backup_manager.get_status()}
+
+@app.post("/api/backup/now")
+async def api_backup_now(_=Depends(require_auth)):
+    """ساخت بکاپ فوری و ارسال آن به تلگرام ادمین."""
+    result = await backup_manager.send_backup("دستی")
+    return result
+
+@app.get("/api/backup/download")
+async def api_backup_download(_=Depends(require_auth)):
+    """دانلود مستقیم فایل بکاپ از پنل."""
+    payload, meta = await build_backup()
+    stamp = now_ir().strftime("%Y-%m-%d_%H-%M")
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="xr-backup-{stamp}.json"',
+            "X-Backup-Checksum": meta["checksum_sha256"],
+        },
+    )
+
+@app.post("/api/backup/restore")
+async def api_backup_restore(request: Request, _=Depends(require_auth)):
+    """بازیابی از فایل بکاپ آپلودشده (بدنه = خود فایل JSON)."""
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="فایل بکاپ خالی است")
+    keep_pw = request.query_params.get("keep_password", "") in ("1", "true", "yes")
+    try:
+        result = await restore_backup(raw, keep_password=keep_pw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, **result}
+
+@app.post("/api/backup/config")
+async def api_backup_config(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    c = CONFIG.setdefault("backup", {})
+    if "enabled" in body:
+        c["enabled"] = bool(body["enabled"])
+        log_activity("settings",
+                     "بکاپ خودکار " + ("فعال" if c["enabled"] else "غیرفعال") + " شد", "ok")
+    if "interval_hours" in body:
+        try:
+            c["interval_hours"] = max(1, min(720, int(body["interval_hours"])))
+        except (TypeError, ValueError):
+            pass
+    await save_state()
+    backup_manager.apply_settings()
+    return {"ok": True, **backup_manager.get_status()}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🌐 خروجی کلودفلر WARP (رفع تحریم OpenAI/Netflix + مخفی‌سازی IP سرور)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/warp/status")
+async def api_warp_status(_=Depends(require_auth)):
+    return {"ok": True, **warp_manager.get_status()}
+
+@app.post("/api/warp/test")
+async def api_warp_test(_=Depends(require_auth)):
+    """تست زندهٔ در دسترس بودن پروکسی WARP."""
+    return {"ok": True, **(await warp_manager.test())}
+
+@app.post("/api/warp/config")
+async def api_warp_config(request: Request, _=Depends(require_auth)):
+    """تنظیم روشن/خاموش، آدرس پروکسی، حالت مسیریابی و لیست دامنه‌ها."""
+    body = await request.json()
+    w = CONFIG.setdefault("warp", {})
+    if "enabled" in body:
+        w["enabled"] = bool(body["enabled"])
+        log_activity("settings",
+                     "خروجی کلودفلر WARP " + ("فعال" if w["enabled"] else "غیرفعال") + " شد", "ok")
+    if "proxy" in body:
+        candidate = str(body.get("proxy") or "").strip()
+        if candidate and parse_proxy(candidate) is None:
+            raise HTTPException(
+                status_code=400,
+                detail="آدرس پروکسی نامعتبر است — نمونه درست: socks5://127.0.0.1:40000",
+            )
+        w["proxy"] = candidate
+    if "mode" in body:
+        m = str(body.get("mode") or "domains").lower()
+        w["mode"] = m if m in ("domains", "all") else "domains"
+    if "domains" in body:
+        w["domains"] = normalize_domains(body.get("domains"))
+    if body.get("reset_domains"):
+        w["domains"] = list(DEFAULT_WARP_DOMAINS)
+    await save_state()
+    return {"ok": True, **warp_manager.get_status()}
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
@@ -2138,6 +2248,13 @@ from multipath import (
     start_all as multipath_start_all,
     stop_all as multipath_stop_all,
 )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 💾 بکاپ خودکار تلگرام  و  🌐 خروجی کلودفلر WARP — از Nyx Panel
+# ══════════════════════════════════════════════════════════════════════════════
+
+from backup_service import backup_manager, build_backup, restore_backup
+from warp_service import DEFAULT_WARP_DOMAINS, normalize_domains, parse_proxy, warp_manager
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VLESS Relay — جدا شده به relay_vless.py (دست نخورده)
