@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.9"
+VERSION = "9.10"
 
 logger = logging.getLogger(BRAND)
 
@@ -78,6 +78,19 @@ CONFIG = {
         # پایش و در صورت مسدودی خودکار به دامنهٔ سالم لیست سفید سوئیچ می‌شوند.
         "default_sni": os.environ.get("AUTO_FAILOVER_SNI", "").strip(),
     },
+    # ⚛️ موتور مسیریابی چندگانه کوانتومی (Quantum MultiPath Engine از Nyx v2.3.0):
+    # هر N ثانیه (پیش‌فرض ۱۵) چهار مسیر ارتباطی مستقل (TLS مستقیم، CDN داخلی،
+    # تونل DNS پورت ۵۳ و پینگ ICMP) به‌صورت موازی تست می‌شوند؛ بهترین مسیر
+    # انتخاب و در قطعی کامل، حالت اضطراری (Panic Mode) با اعلان تلگرام فعال می‌شود.
+    # لودبالانسر هوشمند هم هر lb_interval ثانیه کانفیگ‌ها را نمره‌دهی می‌کند تا
+    # سالم‌ترین سرور همیشه در ردیف اول سابسکریپشن قرار بگیرد.
+    "multipath": {
+        "enabled": os.environ.get("MULTIPATH_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+        "interval": max(5, int(os.environ.get("MULTIPATH_INTERVAL", "15") or 15)),
+        "lb_enabled": os.environ.get("LOAD_BALANCER_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+        "lb_interval": max(10, int(os.environ.get("LOAD_BALANCER_INTERVAL", "30") or 30)),
+        "panic_alerts": os.environ.get("PANIC_ALERTS_ENABLED", "1").strip() not in ("0", "false", "no", ""),
+    },
 }
 
 app.add_middleware(
@@ -120,6 +133,22 @@ async def load_state():
                         pass
                 if "default_sni" in af:
                     cur["default_sni"] = str(af["default_sni"] or "").strip()
+            mp = data.get("multipath")
+            if isinstance(mp, dict):
+                cur_mp = CONFIG.setdefault("multipath", {})
+                for flag in ("enabled", "lb_enabled", "panic_alerts"):
+                    if flag in mp:
+                        cur_mp[flag] = bool(mp[flag])
+                if "interval" in mp:
+                    try:
+                        cur_mp["interval"] = max(5, int(mp["interval"]))
+                    except (TypeError, ValueError):
+                        pass
+                if "lb_interval" in mp:
+                    try:
+                        cur_mp["lb_interval"] = max(10, int(mp["lb_interval"]))
+                    except (TypeError, ValueError):
+                        pass
             logger.info(f"State loaded: {len(LINKS)} links, {len(SUBS)} subs")
     except Exception as e:
         logger.warning(f"Could not load state: {e}")
@@ -137,6 +166,7 @@ async def save_state():
                 "password_hash": AUTH["password_hash"],
                 "cdn_domain": CONFIG.get("cdn_domain", ""),
                 "auto_failover": dict(CONFIG.get("auto_failover", {})),
+                "multipath": dict(CONFIG.get("multipath", {})),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -359,6 +389,8 @@ async def startup():
     _heartbeat_task = asyncio.create_task(_master_heartbeat_loop())
     # دیمون سوئیچ خودکار SNI (Smart Auto-Failover از Nyx Panel)
     auto_failover_manager.apply_settings()
+    # ⚛️ موتور مسیریابی چندگانه + حالت اضطراری + لودبالانسر هوشمند (Nyx v2.3.0)
+    multipath_start_all()
     log_activity("system", "سرور راه‌اندازی شد", "ok")
     logger.info(f"{BRAND} v{VERSION} started on port {CONFIG['port']} (node mode)")
 
@@ -366,6 +398,7 @@ async def startup():
 async def shutdown():
     global _heartbeat_task
     auto_failover_manager.stop()
+    multipath_stop_all()
     if _heartbeat_task:
         _heartbeat_task.cancel()
         try:
@@ -643,11 +676,11 @@ async def subscription_all(request: Request, _=Depends(require_auth)):
     import base64
     host = get_host(request)
     async with LINKS_LOCK:
-        lines = [
-            vless_link_for_link(d, uid, host)
-            for uid, d in LINKS.items()
-            if is_link_allowed(d)
-        ]
+        allowed = [(uid, d) for uid, d in LINKS.items() if is_link_allowed(d)]
+    # ⚖️ لودبالانسر هوشمند: سالم‌ترین/سریع‌ترین سرور همیشه ردیف اول
+    order = load_balancer.sort_uids([uid for uid, _ in allowed])
+    by_uid = dict(allowed)
+    lines = [vless_link_for_link(by_uid[uid], uid, host) for uid in order]
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(content=content, media_type="text/plain")
 
@@ -782,11 +815,13 @@ async def sub_group_subscription(uuid_key: str, request: Request):
     host = get_host(request)
     link_ids = sub.get("link_ids", [])
     async with LINKS_LOCK:
-        lines = []
-        for lid in link_ids:
-            link = LINKS.get(lid)
-            if link and is_link_allowed(link):
-                lines.append(vless_link_for_link(link, lid, host))
+        usable = {lid: dict(LINKS[lid]) for lid in link_ids
+                  if LINKS.get(lid) and is_link_allowed(LINKS[lid])}
+    # ⚖️ لودبالانسر هوشمند: پایدارترین سرور در بالاترین ردیف ساب قرار می‌گیرد
+    lines = [
+        vless_link_for_link(usable[lid], lid, host)
+        for lid in load_balancer.sort_uids([l for l in link_ids if l in usable])
+    ]
 
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(
@@ -908,6 +943,69 @@ async def api_auto_failover_config(request: Request, _=Depends(require_auth)):
             log_activity("settings", "دیمون سوئیچ خودکار SNI غیرفعال شد", "warn")
     auto_failover_manager.apply_settings()
     return {"ok": True, **auto_failover_manager.get_status()}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚛️ Quantum MultiPath Engine — داشبورد زنده پایش ۴ مسیر (از Nyx v2.3.0)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/multipath/status")
+async def api_multipath_status(_=Depends(require_auth)):
+    """وضعیت کامل: ۴ مسیر + حالت اضطراری + لودبالانسر (برای داشبورد زنده)."""
+    return {"ok": True, **multipath_full_status()}
+
+@app.post("/api/multipath/recheck")
+async def api_multipath_recheck(_=Depends(require_auth)):
+    """دکمهٔ «تست اجباری» (Force Recheck): سنجش فوری هر ۴ مسیر با یک کلیک."""
+    snap = await multipath_engine.check_all_paths()
+    await panic_manager.tick()
+    return {"ok": True, "multipath": snap, "panic": panic_manager.get_status()}
+
+@app.get("/api/multipath/panic")
+async def api_multipath_panic(_=Depends(require_auth)):
+    return {"ok": True, **panic_manager.get_status()}
+
+@app.get("/api/load-balancer/status")
+async def api_load_balancer_status(_=Depends(require_auth)):
+    """رتبه‌بندی زندهٔ کانفیگ‌ها (امتیاز ۰ تا ۱۰۰ بر پایه تاخیر/پایداری/آپتایم)."""
+    return {"ok": True, **load_balancer.get_status()}
+
+@app.post("/api/load-balancer/refresh")
+async def api_load_balancer_refresh(_=Depends(require_auth)):
+    """پایش فوری سلامت همه کانفیگ‌ها و به‌روزرسانی رتبه‌بندی."""
+    result = await load_balancer.refresh()
+    return {"ok": True, **result, **load_balancer.get_status()}
+
+@app.post("/api/multipath/config")
+async def api_multipath_config(request: Request, _=Depends(require_auth)):
+    """تنظیمات موتور: روشن/خاموش، بازهٔ پایش، لودبالانسر و اعلان‌های اضطراری."""
+    body = await request.json()
+    mp = CONFIG.setdefault("multipath", {})
+    changed = []
+    if "enabled" in body:
+        mp["enabled"] = bool(body["enabled"])
+        changed.append("موتور مسیریابی چندگانه " + ("فعال" if mp["enabled"] else "غیرفعال") + " شد")
+    if "lb_enabled" in body:
+        mp["lb_enabled"] = bool(body["lb_enabled"])
+        changed.append("لودبالانسر هوشمند " + ("فعال" if mp["lb_enabled"] else "غیرفعال") + " شد")
+    if "panic_alerts" in body:
+        mp["panic_alerts"] = bool(body["panic_alerts"])
+        changed.append("اعلان حالت اضطراری " + ("فعال" if mp["panic_alerts"] else "غیرفعال") + " شد")
+    if "interval" in body:
+        try:
+            mp["interval"] = max(5, min(600, int(body["interval"])))
+        except (TypeError, ValueError):
+            pass
+    if "lb_interval" in body:
+        try:
+            mp["lb_interval"] = max(10, min(3600, int(body["lb_interval"])))
+        except (TypeError, ValueError):
+            pass
+    await save_state()
+    for msg in changed:
+        log_activity("settings", msg, "ok")
+    multipath_engine.apply_settings()
+    load_balancer.apply_settings()
+    return {"ok": True, **multipath_full_status()}
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
@@ -1888,6 +1986,19 @@ async def node_api_subs(request: Request, _=Depends(require_node_api)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 from auto_failover import auto_failover_manager, test_sni_domain, FALLBACK_SNI_POOL
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚛️ Quantum MultiPath Engine + Panic Mode + Smart Load Balancer — از Nyx v2.3.0
+# ══════════════════════════════════════════════════════════════════════════════
+
+from multipath import (
+    multipath_engine,
+    panic_manager,
+    load_balancer,
+    get_full_status as multipath_full_status,
+    start_all as multipath_start_all,
+    stop_all as multipath_stop_all,
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VLESS Relay — جدا شده به relay_vless.py (دست نخورده)
