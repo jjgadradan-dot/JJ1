@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.11"
+VERSION = "9.12"
 
 logger = logging.getLogger(BRAND)
 
@@ -91,6 +91,9 @@ CONFIG = {
         "lb_interval": max(10, int(os.environ.get("LOAD_BALANCER_INTERVAL", "30") or 30)),
         "panic_alerts": os.environ.get("PANIC_ALERTS_ENABLED", "1").strip() not in ("0", "false", "no", ""),
     },
+    # 🎨 شخصی‌سازی صفحه ساب مشتری (Sub Portal Custom Branding از Nyx):
+    # نام برند، لوگو، رنگ، دکمه‌های پشتیبانی/تمدید، کادر اعلان و باکس دانلود اپ‌ها.
+    "branding": {},
 }
 
 app.add_middleware(
@@ -133,6 +136,9 @@ async def load_state():
                         pass
                 if "default_sni" in af:
                     cur["default_sni"] = str(af["default_sni"] or "").strip()
+            br = data.get("branding")
+            if isinstance(br, dict):
+                CONFIG["branding"] = br
             mp = data.get("multipath")
             if isinstance(mp, dict):
                 cur_mp = CONFIG.setdefault("multipath", {})
@@ -167,6 +173,7 @@ async def save_state():
                 "cdn_domain": CONFIG.get("cdn_domain", ""),
                 "auto_failover": dict(CONFIG.get("auto_failover", {})),
                 "multipath": dict(CONFIG.get("multipath", {})),
+                "branding": dict(CONFIG.get("branding", {})),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -1055,6 +1062,79 @@ async def api_protocols(_=Depends(require_auth)):
         "ok": True,
         "protocols": [{"id": p, "label": PROTOCOL_LABELS.get(p, p)} for p in PROTOCOLS],
         "default": DEFAULT_PROTOCOL,
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🎨 برندینگ صفحه ساب مشتری (Sub Portal Custom Branding از Nyx)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/branding")
+async def api_get_branding(_=Depends(require_auth)):
+    from branding import DEFAULT_CLIENT_APPS, normalize_branding
+    return {
+        "ok": True,
+        "branding": normalize_branding(CONFIG.get("branding")),
+        "default_apps": DEFAULT_CLIENT_APPS,
+    }
+
+@app.post("/api/branding")
+async def api_set_branding(request: Request, _=Depends(require_auth)):
+    """ذخیره نام برند، لوگو، رنگ، دکمه‌های پشتیبانی/تمدید، اعلان و اپ‌ها."""
+    from branding import normalize_branding
+    body = await request.json()
+    CONFIG["branding"] = normalize_branding(body)
+    await save_state()
+    log_activity("settings", "برندینگ صفحه مشتری به‌روزرسانی شد", "ok")
+    return {"ok": True, "branding": CONFIG["branding"]}
+
+@app.get("/subinfo/{uuid}", response_class=HTMLResponse)
+async def subinfo_page(uuid: str, request: Request):
+    """صفحه شخصی‌سازی‌شدهٔ مشتری برای یک کانفیگ (بدون نیاز به ورود)."""
+    from branding import get_subinfo_html
+    async with LINKS_LOCK:
+        exists = uuid in LINKS
+    if not exists:
+        return HTMLResponse(
+            "<div style=\"font-family:sans-serif;padding:44px;text-align:center;"
+            "background:#060a14;color:#8AA0C4;min-height:100vh\">اشتراک پیدا نشد</div>",
+            status_code=404,
+        )
+    return HTMLResponse(content=get_subinfo_html(uuid, CONFIG.get("branding")))
+
+@app.get("/api/subinfo/{uuid}")
+async def api_subinfo(uuid: str, request: Request):
+    """داده‌های زندهٔ اشتراک مشتری برای صفحه /subinfo/{uuid}."""
+    async with LINKS_LOCK:
+        link = dict(LINKS[uuid]) if uuid in LINKS else None
+    if link is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    host = get_host(request)
+    expires_fa = "∞"
+    if link.get("expires_at"):
+        try:
+            exp = datetime.fromisoformat(link["expires_at"])
+            days_left = (exp - datetime.now()).days
+            expires_fa = f"{max(0, days_left)} روز" if days_left >= 0 else "منقضی"
+        except (TypeError, ValueError):
+            expires_fa = "—"
+
+    return {
+        "uuid": uuid,
+        "label": link.get("label", ""),
+        "active": is_link_allowed(link),
+        "protocol": link.get("protocol", DEFAULT_PROTOCOL),
+        "location": link.get("location", ""),
+        "used_bytes": link.get("used_bytes", 0),
+        "used_fmt": fmt_bytes(link.get("used_bytes", 0)),
+        "limit_bytes": link.get("limit_bytes", 0),
+        "limit_fmt": "∞" if link.get("limit_bytes", 0) == 0 else fmt_bytes(link["limit_bytes"]),
+        "expires_at": link.get("expires_at"),
+        "expires_fa": expires_fa,
+        "connections": sum(1 for c in connections.values() if c.get("uuid") == uuid),
+        "vless_link": vless_link_for_link(link, uuid, host),
+        "sub_url": f"https://{host}/sub/{uuid}",
+        "subinfo_url": f"https://{host}/subinfo/{uuid}",
     }
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
