@@ -24,7 +24,6 @@
 
 import asyncio
 import secrets
-import socket
 from datetime import datetime
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -34,7 +33,6 @@ from main import (
     LINKS_LOCK,
     connections,
     error_logs,
-    hourly_traffic,  # noqa: F401 — از طریق check_and_use به‌روزرسانی می‌شود
     is_ip_allowed,
     is_link_allowed,
     log_activity,
@@ -43,7 +41,7 @@ from main import (
     stats,
 )
 from protocols import trojan_password_hash
-from relay_vless import RELAY_BUF, check_and_use
+from relay_vless import RELAY_BUF, _tune_socket, check_and_use, ensure_flush_loop, flush_usage
 from speed_limit import throttle
 
 CRLF = b"\r\n"
@@ -136,7 +134,7 @@ def parse_trojan_header(chunk: bytes, expected_hash: str):
     return command, address, port, chunk[pos:]
 
 
-async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, uid: str):
+async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, uid: str, speed_limited: bool = False):
     try:
         while True:
             msg = await ws.receive()
@@ -145,10 +143,11 @@ async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, 
             data = msg.get("bytes") or (msg.get("text") or "").encode()
             if not data:
                 continue
-            if not await check_and_use(uid, len(data)):
+            if not check_and_use(uid, len(data)):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
-            await throttle(uid, len(data))
+            if speed_limited:
+                await throttle(uid, len(data))
             stats["total_requests"] += 1
             connections[conn_id]["bytes"] += len(data)
             writer.write(data)
@@ -163,17 +162,18 @@ async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, 
             pass
 
 
-async def _tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, uid: str):
+async def _tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, uid: str, speed_limited: bool = False):
     """برخلاف VLESS، Trojan هیچ هدر پاسخی ندارد — داده خام برمی‌گردد."""
     try:
         while True:
             data = await reader.read(RELAY_BUF)
             if not data:
                 break
-            if not await check_and_use(uid, len(data)):
+            if not check_and_use(uid, len(data)):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
-            await throttle(uid, len(data))
+            if speed_limited:
+                await throttle(uid, len(data))
             connections[conn_id]["bytes"] += len(data)
             await ws.send_bytes(data)
     except Exception:
@@ -183,6 +183,7 @@ async def _tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, 
 async def trojan_tunnel(ws: WebSocket, uuid: str):
     """اندپوینت WebSocket پروتکل Trojan — مسیر /trojan/{uuid}."""
     await ws.accept()
+    ensure_flush_loop()
 
     async with LINKS_LOCK:
         link = LINKS.get(uuid)
@@ -203,6 +204,9 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
         )
         await ws.close(code=1008, reason="ip limit reached")
         return
+
+    # ⚡ اگر کانفیگ محدودیت سرعت ندارد، throttle در مسیر داغ اصلاً صدا زده نمی‌شود
+    speed_limited = int((link or {}).get("speed_limit_bytes", 0) or 0) > 0
 
     conn_id = secrets.token_urlsafe(6)
     connections[conn_id] = {
@@ -246,7 +250,7 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
             await ws.close(code=1008, reason="unsupported command")
             return
 
-        if not await check_and_use(uuid, len(first_chunk)):
+        if not check_and_use(uuid, len(first_chunk)):
             await ws.close(code=1008, reason="quota/disabled")
             return
 
@@ -259,9 +263,7 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
         (reader, writer), via_warp = await warp_manager.open_connection(address, port, timeout=10.0)
         if via_warp:
             connections[conn_id]["via"] = "warp"
-        sock = writer.transport.get_extra_info("socket")
-        if sock:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        _tune_socket(writer)
 
         if payload:
             writer.write(payload)
@@ -269,8 +271,8 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
 
         done, pending = await asyncio.wait(
             {
-                asyncio.create_task(_ws_to_tcp(ws, writer, conn_id, uuid)),
-                asyncio.create_task(_tcp_to_ws(ws, reader, conn_id, uuid)),
+                asyncio.create_task(_ws_to_tcp(ws, writer, conn_id, uuid, speed_limited)),
+                asyncio.create_task(_tcp_to_ws(ws, reader, conn_id, uuid, speed_limited)),
             },
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -281,6 +283,7 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
             except asyncio.CancelledError:
                 pass
 
+        flush_usage()
         asyncio.create_task(save_state())
 
     except WebSocketDisconnect:
@@ -293,6 +296,7 @@ async def trojan_tunnel(ws: WebSocket, uuid: str):
         error_logs.append({"error": str(exc), "time": datetime.now().isoformat()})
         logger.error(f"Trojan error [{conn_id}]: {exc}")
     finally:
+        flush_usage()
         if writer:
             try:
                 writer.close()

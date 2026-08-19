@@ -27,7 +27,7 @@ from main import (
     is_ip_allowed,
     save_state,
 )
-from relay_vless import parse_vless_header, check_and_use
+from relay_vless import parse_vless_header, check_and_use, flush_usage, ensure_flush_loop
 from speed_limit import throttle
 
 router = APIRouter()
@@ -94,7 +94,7 @@ def _tune_socket(writer: asyncio.StreamWriter):
 
 class _QuotaGate:
     """
-    نسخه‌ی تطبیقی: به‌جای await check_and_use() به‌ازای هر چانک، و به‌جای یک آستانه‌ی
+    نسخه‌ی تطبیقی: به‌جای check_and_use() به‌ازای هر چانک، و به‌جای یک آستانه‌ی
     ثابت، نرخ واقعی ترافیک هر سشن رو با EWMA اندازه می‌گیره و اندازه‌ی batch رو زنده
     عوض می‌کنه:
       - سشن پرسرعت (دانلود حجیم) → batch بزرگ می‌شه → await های سنگین کمتر.
@@ -112,7 +112,7 @@ class _QuotaGate:
         self.batch_bytes = QUOTA_START_BATCH
         self.rate_ewma = 0.0
 
-    async def add(self, nbytes: int) -> bool:
+    def add(self, nbytes: int) -> bool:
         if not self.ok:
             return False
         self.pending += nbytes
@@ -126,14 +126,14 @@ class _QuotaGate:
                 target = int(self.rate_ewma * QUOTA_CHECK_INTERVAL)
                 self.batch_bytes = max(QUOTA_MIN_BATCH, min(QUOTA_MAX_BATCH, target or QUOTA_MIN_BATCH))
             self.last_check = now
-            self.ok = await check_and_use(self.uuid, flush)
+            self.ok = check_and_use(self.uuid, flush)
             return self.ok
         return True
 
-    async def flush(self) -> bool:
+    def flush(self) -> bool:
         if self.pending:
             flush, self.pending = self.pending, 0
-            self.ok = self.ok and await check_and_use(self.uuid, flush)
+            self.ok = self.ok and check_and_use(self.uuid, flush)
         return self.ok
 
 
@@ -231,6 +231,7 @@ async def _get_or_create_session(uuid: str, mode: str, session_id: str, ip: str 
         }
         xhttp_sessions[session_id] = sess
         logger.info(f"new XHTTP[{mode}] session [{session_id[:8]}] uuid={uuid[:8]} ip={ip}")
+        ensure_flush_loop()
         return sess
 
 
@@ -262,6 +263,7 @@ async def _teardown(session_id: str):
             dq.put_nowait(None)
         except Exception:
             pass
+    flush_usage()
     logger.info(f"closed XHTTP[{sess.get('mode')}] [{session_id[:8]}] total={len(xhttp_sessions)}")
 
 
@@ -294,7 +296,7 @@ async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamR
             data = await reader.read(XHTTP_BUF)
             if not data:
                 break
-            if not await gate.add(len(data)):
+            if not gate.add(len(data)):
                 break
             await throttle(uuid, len(data))
             async with XHTTP_LOCK:
@@ -309,7 +311,7 @@ async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamR
     except (asyncio.CancelledError, Exception):
         pass
     finally:
-        await gate.flush()
+        gate.flush()
         await _teardown(session_id)
 
 
@@ -343,6 +345,7 @@ def _downstream_gen(sess: dict):
 @router.get("/xhttp-siz10/{mode}/{uuid}/{session_id}")
 async def xhttp_downlink(mode: str, uuid: str, session_id: str, request: Request):
     ensure_reaper()
+    ensure_flush_loop()
     if mode not in ("packet-up", "stream-up"):
         raise HTTPException(status_code=404, detail="unknown mode")
     await _check_link(uuid)
@@ -368,7 +371,7 @@ async def packet_up_upload(uuid: str, session_id: str, seq: int, request: Reques
     if not body:
         return {"ok": True}
 
-    if not await check_and_use(uuid, len(body)):
+    if not check_and_use(uuid, len(body)):
         await _teardown(session_id)
         raise HTTPException(status_code=403, detail="quota/disabled/unknown")
     await throttle(uuid, len(body))
@@ -443,7 +446,7 @@ async def stream_up_upload(uuid: str, session_id: str, request: Request):
                 continue
             sess["last_seen"] = time.time()
 
-            if not await gate.add(len(chunk)):
+            if not gate.add(len(chunk)):
                 raise HTTPException(status_code=403, detail="quota/disabled/unknown")
             await throttle(uuid, len(chunk))
 
@@ -459,14 +462,14 @@ async def stream_up_upload(uuid: str, session_id: str, request: Request):
             if flow.should_drain(writer.transport.get_write_buffer_size()):
                 await flow.drain(writer)
     except HTTPException:
-        await gate.flush()
+        gate.flush()
         await _teardown(session_id)
         raise
     except Exception as exc:
         error_logs.append({"error": str(exc), "time": datetime.now().isoformat()})
-        await gate.flush()
+        gate.flush()
         await _teardown(session_id)
         raise HTTPException(status_code=502, detail="stream error")
 
-    await gate.flush()
+    gate.flush()
     return {"ok": True}
