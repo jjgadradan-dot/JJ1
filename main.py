@@ -22,7 +22,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
-BRAND = "RVG"
+BRAND = "XR"
 VERSION = "9.7"
 
 logger = logging.getLogger(BRAND)
