@@ -232,6 +232,12 @@ async def test_end_to_end():
         check("کلاینت با رمز اشتباه قطع می‌شود", rejected)
 
         # ── مصرف ترافیک ثبت شده باشد ─────────────────────────────────────────
+        # ⚡ v9.15: حسابداری مصرف دسته‌ای است (فلاش هر ۱ ثانیه یا هنگام بسته شدن
+        # اتصال)؛ پس چند لحظه صبر می‌کنیم تا فلاش سرور-side اتصال بسته‌شده اجرا شود.
+        for _ in range(30):
+            if main.LINKS[uid]["used_bytes"] > 0:
+                break
+            await asyncio.sleep(0.1)
         check("مصرف ترافیک روی کانفیگ ثبت شد", main.LINKS[uid]["used_bytes"] > 0,
               f"-> {main.LINKS[uid]['used_bytes']} بایت")
 

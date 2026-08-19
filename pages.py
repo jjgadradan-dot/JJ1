@@ -342,6 +342,17 @@ a{color:inherit;text-decoration:none}
 .proto-card.active .proto-card-icon{background:var(--accent);color:#fff}
 .proto-card-title{font-size:11px;font-weight:800;color:var(--t1)}
 .proto-card-desc{font-size:9px;color:var(--t3);margin-top:3px;line-height:1.5}
+/* ⚡ پکت فرگمنت (دور زدن DPI) */
+.frag-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.frag-card{border:1.5px solid var(--card-b);border-radius:11px;padding:9px 8px;cursor:pointer;transition:.15s;text-align:center;background:rgba(0,0,0,.1);font-size:10px;font-weight:700;color:var(--t2);line-height:1.6}
+[data-theme="light"] .frag-card{background:#fff}
+.frag-card:hover{border-color:var(--card-bh);transform:translateY(-1px)}
+.frag-card.active{border-color:var(--accent);background:var(--accent-d);color:var(--t1);box-shadow:0 0 0 2px rgba(59,130,246,.12)}
+.frag-card-hint{display:block;font-size:8px;color:var(--t3);font-weight:400;line-height:1.6}
+.frag-card.active .frag-card-hint{color:var(--accent2)}
+.frag-custom{display:none;margin-top:9px;gap:9px}
+.frag-custom.show{display:flex;flex-wrap:wrap}
+.frag-custom .fg{flex:1;min-width:130px}
 .cp-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;border-top:1px solid var(--card-b);flex-wrap:wrap}
 .cp-footer-note{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--t3);line-height:1.7;flex:1;min-width:220px}
 .cp-footer-note i{color:var(--accent);font-size:15px;flex-shrink:0}
@@ -757,6 +768,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
 .pc-ws{background:var(--accent-d);color:var(--accent2)}
 .pc-xhttp{background:var(--purple-bg);color:#A78BFA}
 .pc-ultra{background:var(--green-bg);color:var(--green-t)}
+.pc-trojan{background:var(--red-bg);color:var(--red-t)}
 .cfg-sub-tag{font-size:9.5px;color:var(--t3);display:flex;align-items:center;gap:4px;white-space:nowrap}
 .cfg-sub-tag i{color:var(--purple);font-size:11px}
 .tog{width:19px;height:30px;border-radius:19px;background:rgba(100,116,139,0.25);position:relative;cursor:pointer;transition:.2s;flex-shrink:0;border:none}
@@ -904,6 +916,29 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     <div class="fg" style="margin-bottom:13px"><label>انقضا (روز از الان، 0 = بدون تغییر/نامحدود)</label><input class="fi" id="el-exp" type="number" min="0" step="1" style="width:100%"></div>
     <div class="fg" style="margin-bottom:13px"><label>یادداشت</label><input class="fi" id="el-note" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:13px">
+      <div class="fg" style="flex:1"><label>پروتکل</label>
+        <select class="fs" id="el-proto" style="width:100%">
+          <option value="vless-ws">VLESS / WebSocket</option>
+          <option value="xhttp-packet-up">XHTTP Ultra · packet-up</option>
+          <option value="xhttp-stream-up">XHTTP Ultra · stream-up</option>
+          <option value="trojan-ws">Trojan / WebSocket</option>
+        </select>
+      </div>
+      <div class="fg" style="flex:1"><label>پکت فرگمنت</label>
+        <select class="fs" id="el-frag-preset" style="width:100%" onchange="onElFragChange()">
+          <option value="off">خاموش</option>
+          <option value="mci">📱 همراه اول (۱۰۰-۲۰۰ / ۱۰-۲۰)</option>
+          <option value="irancell">📡 ایرانسل (۵۰-۱۵۰ / ۵-۱۵)</option>
+          <option value="intranet">⚡ ترافیک داخلی (۱۰-۶۰ / ۲-۱۰)</option>
+          <option value="custom">🛠️ دستی...</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" id="el-frag-custom" style="display:none;margin-bottom:13px">
+      <div class="fg" style="flex:1"><label>طول قطعه (مثل 100-200)</label><input class="fi" id="el-frag-length" dir="ltr" placeholder="100-200" style="width:100%"></div>
+      <div class="fg" style="flex:1"><label>فاصله قطعات (مثل 10-20)</label><input class="fi" id="el-frag-interval" dir="ltr" placeholder="10-20" style="width:100%"></div>
+    </div>
+    <div class="form-row" style="margin-bottom:13px">
       <div class="fg" style="flex:1"><label>Fingerprint (uTLS)</label>
         <select class="fs" id="el-fp" style="width:100%">
           <option value="chrome">chrome</option>
@@ -989,6 +1024,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     <div class="nav-it" data-pg="master"><i class="ti ti-api"></i> API نود <span class="nav-badge" id="master-nb">API</span></div>
     <div class="nav-it" data-pg="subscriptions"><i class="ti ti-rss"></i> سابسکریپشن</div>
     <div class="nav-it" data-pg="traffic"><i class="ti ti-chart-area"></i> ترافیک</div>
+    <div class="nav-it" data-pg="monitor"><i class="ti ti-radar-2"></i> پایش شبکه 📡</div>
     <div class="nav-it" data-pg="connections"><i class="ti ti-plug-connected"></i> اتصالات <span class="nav-badge" id="conns-nb">0</span></div>
     <div class="nav-sec">سیستم</div>
     <div class="nav-it" data-pg="security"><i class="ti ti-shield-lock"></i> امنیت</div>
@@ -1129,6 +1165,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
           <option value="vless-ws">VLESS / WebSocket</option>
           <option value="xhttp-packet-up">XHTTP Ultra · packet-up</option>
           <option value="xhttp-stream-up">XHTTP Ultra · stream-up</option>
+          <option value="trojan-ws">Trojan / WebSocket</option>
         </select>
         <div class="proto-cards">
           <div class="proto-card active" data-val="vless-ws" onclick="selectProto('vless-ws',this)">
@@ -1149,6 +1186,27 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
             <div class="proto-card-title">XHTTP · stream-up</div>
             <div class="proto-card-desc">تاخیر پایین‌تر</div>
           </div>
+          <div class="proto-card" data-val="trojan-ws" onclick="selectProto('trojan-ws',this)">
+            <div class="proto-card-check"><i class="ti ti-check"></i></div>
+            <div class="proto-card-icon"><i class="ti ti-shield-lock"></i></div>
+            <div class="proto-card-title">Trojan · WS</div>
+            <div class="proto-card-desc">رمز = UUID کانفیگ</div>
+          </div>
+        </div>
+      </div>
+      <div class="cp-block mb16">
+        <div class="cp-block-label"><i class="ti ti-scissors"></i> پکت فرگمنت (دور زدن DPI)</div>
+        <input type="hidden" id="nl-frag-preset" value="off">
+        <div class="frag-grid" id="frag-grid">
+          <div class="frag-card active" data-preset="off" onclick="selectFrag('off',this)">خاموش<span class="frag-card-hint">بدون تغییر</span></div>
+          <div class="frag-card" data-preset="mci" onclick="selectFrag('mci',this)">📱 همراه اول<span class="frag-card-hint">۱۰۰-۲۰۰ / ۱۰-۲۰</span></div>
+          <div class="frag-card" data-preset="irancell" onclick="selectFrag('irancell',this)">📡 ایرانسل<span class="frag-card-hint">۵۰-۱۵۰ / ۵-۱۵</span></div>
+          <div class="frag-card" data-preset="intranet" onclick="selectFrag('intranet',this)">⚡ ترافیک داخلی<span class="frag-card-hint">۱۰-۶۰ / ۲-۱۰</span></div>
+          <div class="frag-card" data-preset="custom" onclick="selectFrag('custom',this)">🛠️ دستی<span class="frag-card-hint">مقادیر دلخواه</span></div>
+        </div>
+        <div class="frag-custom" id="frag-custom">
+          <div class="fg"><label>طول قطعه (مثل 100-200)</label><input class="fi" id="nl-frag-length" dir="ltr" placeholder="100-200" style="width:100%"></div>
+          <div class="fg"><label>فاصله قطعات (مثل 10-20)</label><input class="fi" id="nl-frag-interval" dir="ltr" placeholder="10-20" style="width:100%"></div>
         </div>
       </div>
       <div class="cp-row">
@@ -1218,7 +1276,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         </div>
       </div>
       <div class="cp-footer">
-        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · فقط UUID‌های ثبت‌شده اجازه اتصال دارند · پروتکل پس از ساخت قابل تغییر نیست.</div>
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · فقط UUID‌های ثبت‌شده اجازه اتصال دارند · پروتکل و فرگمنت از بخش «ویرایش کانفیگ» هم قابل تغییرند.</div>
         <button class="cp-submit-btn" onclick="createLink()"><i class="ti ti-link-plus"></i> ساخت کانفیگ</button>
       </div>
     </div>
@@ -1493,6 +1551,56 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
   </div>
   <div class="chg-tl" id="chg-tl"></div>
 </section>
+<section class="pg" id="pg-monitor">
+  <div class="topbar"><div><div class="tb-title"><i class="ti ti-radar-2"></i> پایش شبکه</div><div class="tb-sub">پایش هم‌زمان ۴ مسیر ارتباطی · حالت اضطراری (Panic Mode) · لودبالانسر هوشمند سابسکریپشن</div></div></div>
+<div class="pw-panel mp-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-atom-2"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">⚛️ موتور مسیریابی چندگانه کوانتومی <span class="mp-badge" id="mp-badge">در حال بارگذاری...</span></div>
+        <div class="pw-hero-sub">پایش همزمان ۴ مسیر ارتباطی مستقل هر ۱۵ ثانیه و انتخاب خودکار بهترین مسیر — در قطعی کامل اینترنت بین‌الملل، حالت اضطراری فعال و به تلگرام ادمین هشدار داده می‌شود (از Nyx Panel v2.3.0)</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div id="mp-panic-box" style="display:none" class="mp-panic-alert"></div>
+      <div class="mp-rec" id="mp-rec"><i class="ti ti-radar-2"></i> در حال اولین پایش ۴ مسیر...</div>
+      <div class="mp-routes" id="mp-routes"></div>
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">آخرین پایش</div><div class="af-tile-val fa" id="mp-lastcheck">—</div></div>
+        <div class="af-tile"><div class="af-tile-label">مسیر سالم</div><div class="af-tile-val" id="mp-healthy">۰ از ۴</div></div>
+        <div class="af-tile"><div class="af-tile-label">میانگین امتیاز</div><div class="af-tile-val" id="mp-avg">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">رخداد اضطراری</div><div class="af-tile-val" id="mp-panics">۰</div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:170px;background:linear-gradient(135deg,#F59E0B,#EF4444)" onclick="recheckMultiPath(this)"><i class="ti ti-refresh"></i> تست اجباری هر ۴ مسیر</button>
+        <button class="cdn-reset" id="mp-toggle-btn" onclick="toggleMultiPath()"><i class="ti ti-power"></i> <span id="mp-toggle-lbl">غیرفعال‌سازی</span></button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>مسیر ۱ اتصال مستقیم TLS به SNI کانفیگ، مسیر ۲ دروازه CDN داخل ایران (ابر آروان)، مسیر ۳ امکان تونل DNS روی پورت ۵۳ و مسیر ۴ عبور بستهٔ خام ICMP لایه ۳ را می‌سنجد. حالت اضطراری با منطق <b dir="ltr">Hysteresis</b> فقط پس از <b>۳</b> چک متوالی ناموفق فعال می‌شود تا آلارم کاذب ندهد و پس از <b>۲</b> چک موفق، پیام رفع بحران با مدت دقیق قطعی به تلگرام ارسال می‌گردد.</span></div>
+    </div>
+  </div>
+  <div class="pw-panel mp-panel" style="margin-top:18px;border-color:rgba(16,185,129,.28)">
+    <div class="pw-hero">
+      <div class="pw-hero-icon" style="background:linear-gradient(135deg,#10B981,#3B82F6)"><i class="ti ti-scale"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">⚖️ لودبالانسر هوشمند سابسکریپشن <span class="mp-badge" id="lb-badge">در حال بارگذاری...</span></div>
+        <div class="pw-hero-sub">هر ۳۰ ثانیه همه کانفیگ‌های فعال بر اساس تاخیر، پایداری و آپتایم نمره (۰ تا ۱۰۰) می‌گیرند تا سالم‌ترین سرور همیشه در ردیف اول لینک سابسکریپشن کاربران قرار بگیرد</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">آخرین پایش</div><div class="af-tile-val fa" id="lb-lastcheck">—</div></div>
+        <div class="af-tile"><div class="af-tile-label">کانفیگ سالم</div><div class="af-tile-val" id="lb-healthy">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">بازه (ثانیه)</div><div class="af-tile-val" id="lb-interval">۳۰</div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:170px;background:linear-gradient(135deg,#10B981,#3B82F6)" onclick="refreshLoadBalancer(this)"><i class="ti ti-bolt"></i> رتبه‌بندی فوری کانفیگ‌ها</button>
+        <button class="cdn-reset" id="lb-toggle-btn" onclick="toggleLoadBalancer()"><i class="ti ti-power"></i> <span id="lb-toggle-lbl">غیرفعال‌سازی</span></button>
+      </div>
+      <div class="lb-list" id="lb-list"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز کانفیگی رتبه‌بندی نشده</div></div>
+    </div>
+  </div>
+  
+</section>
 <section class="pg" id="pg-settings">
   <div class="topbar"><div><div class="tb-title"><i class="ti ti-settings"></i> تنظیمات</div></div></div>
   <div class="g2">
@@ -1599,52 +1707,6 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
       </div>
       <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>دیمون هر <b dir="ltr">۶۰</b> ثانیه SNI کانفیگ‌های فعال را با یک TLS handshake واقعی تست می‌کند. اگر دامنه‌ای مسدود شده باشد، سالم‌ترین دامنه از لیست سفید (بانک‌ها، آروان، دیجی‌کالا و...) را جایگزین می‌کند و به تلگرام ادمین هشدار می‌دهد. کانفیگ‌هایی که SNI اختصاصی ندارند از SNI سراسری استفاده می‌کنند.</span></div>
       <div class="af-history" id="af-history"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز سوئیچی ثبت نشده</div></div>
-    </div>
-  </div>
-  <div class="pw-panel mp-panel" style="margin-top:18px">
-    <div class="pw-hero">
-      <div class="pw-hero-icon"><i class="ti ti-atom-2"></i></div>
-      <div class="pw-hero-text">
-        <div class="pw-hero-title">⚛️ موتور مسیریابی چندگانه کوانتومی <span class="mp-badge" id="mp-badge">در حال بارگذاری...</span></div>
-        <div class="pw-hero-sub">پایش همزمان ۴ مسیر ارتباطی مستقل هر ۱۵ ثانیه و انتخاب خودکار بهترین مسیر — در قطعی کامل اینترنت بین‌الملل، حالت اضطراری فعال و به تلگرام ادمین هشدار داده می‌شود (از Nyx Panel v2.3.0)</div>
-      </div>
-    </div>
-    <div class="pw-body">
-      <div id="mp-panic-box" style="display:none" class="mp-panic-alert"></div>
-      <div class="mp-rec" id="mp-rec"><i class="ti ti-radar-2"></i> در حال اولین پایش ۴ مسیر...</div>
-      <div class="mp-routes" id="mp-routes"></div>
-      <div class="af-grid">
-        <div class="af-tile"><div class="af-tile-label">آخرین پایش</div><div class="af-tile-val fa" id="mp-lastcheck">—</div></div>
-        <div class="af-tile"><div class="af-tile-label">مسیر سالم</div><div class="af-tile-val" id="mp-healthy">۰ از ۴</div></div>
-        <div class="af-tile"><div class="af-tile-label">میانگین امتیاز</div><div class="af-tile-val" id="mp-avg">۰</div></div>
-        <div class="af-tile"><div class="af-tile-label">رخداد اضطراری</div><div class="af-tile-val" id="mp-panics">۰</div></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="pw-submit" style="flex:1;min-width:170px;background:linear-gradient(135deg,#F59E0B,#EF4444)" onclick="recheckMultiPath(this)"><i class="ti ti-refresh"></i> تست اجباری هر ۴ مسیر</button>
-        <button class="cdn-reset" id="mp-toggle-btn" onclick="toggleMultiPath()"><i class="ti ti-power"></i> <span id="mp-toggle-lbl">غیرفعال‌سازی</span></button>
-      </div>
-      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>مسیر ۱ اتصال مستقیم TLS به SNI کانفیگ، مسیر ۲ دروازه CDN داخل ایران (ابر آروان)، مسیر ۳ امکان تونل DNS روی پورت ۵۳ و مسیر ۴ عبور بستهٔ خام ICMP لایه ۳ را می‌سنجد. حالت اضطراری با منطق <b dir="ltr">Hysteresis</b> فقط پس از <b>۳</b> چک متوالی ناموفق فعال می‌شود تا آلارم کاذب ندهد و پس از <b>۲</b> چک موفق، پیام رفع بحران با مدت دقیق قطعی به تلگرام ارسال می‌گردد.</span></div>
-    </div>
-  </div>
-  <div class="pw-panel mp-panel" style="margin-top:18px;border-color:rgba(16,185,129,.28)">
-    <div class="pw-hero">
-      <div class="pw-hero-icon" style="background:linear-gradient(135deg,#10B981,#3B82F6)"><i class="ti ti-scale"></i></div>
-      <div class="pw-hero-text">
-        <div class="pw-hero-title">⚖️ لودبالانسر هوشمند سابسکریپشن <span class="mp-badge" id="lb-badge">در حال بارگذاری...</span></div>
-        <div class="pw-hero-sub">هر ۳۰ ثانیه همه کانفیگ‌های فعال بر اساس تاخیر، پایداری و آپتایم نمره (۰ تا ۱۰۰) می‌گیرند تا سالم‌ترین سرور همیشه در ردیف اول لینک سابسکریپشن کاربران قرار بگیرد</div>
-      </div>
-    </div>
-    <div class="pw-body">
-      <div class="af-grid">
-        <div class="af-tile"><div class="af-tile-label">آخرین پایش</div><div class="af-tile-val fa" id="lb-lastcheck">—</div></div>
-        <div class="af-tile"><div class="af-tile-label">کانفیگ سالم</div><div class="af-tile-val" id="lb-healthy">۰</div></div>
-        <div class="af-tile"><div class="af-tile-label">بازه (ثانیه)</div><div class="af-tile-val" id="lb-interval">۳۰</div></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="pw-submit" style="flex:1;min-width:170px;background:linear-gradient(135deg,#10B981,#3B82F6)" onclick="refreshLoadBalancer(this)"><i class="ti ti-bolt"></i> رتبه‌بندی فوری کانفیگ‌ها</button>
-        <button class="cdn-reset" id="lb-toggle-btn" onclick="toggleLoadBalancer()"><i class="ti ti-power"></i> <span id="lb-toggle-lbl">غیرفعال‌سازی</span></button>
-      </div>
-      <div class="lb-list" id="lb-list"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز کانفیگی رتبه‌بندی نشده</div></div>
     </div>
   </div>
   <div class="pw-panel br-panel" style="margin-top:18px">
@@ -1807,7 +1869,7 @@ function expChip(exp,expired){
   return `<span class="exp-chip ec-ok"><i class="ti ti-calendar-check"></i> ${toFa(d)} روز مانده</span>`;
 }
 function protoBadge(p){
-  const m={'vless-ws':['VLESS · WS','pc-ws'],'xhttp-packet-up':['XHTTP · packet-up','pc-xhttp'],'xhttp-stream-up':['XHTTP · stream-up','pc-xhttp'],'xhttp-stream-one':['XHTTP ULTRA','pc-ultra']};
+  const m={'vless-ws':['VLESS · WS','pc-ws'],'xhttp-packet-up':['XHTTP · packet-up','pc-xhttp'],'xhttp-stream-up':['XHTTP · stream-up','pc-xhttp'],'xhttp-stream-one':['XHTTP ULTRA','pc-ultra'],'trojan-ws':['Trojan · WS','pc-trojan']};
   const v=m[p]||m['vless-ws'];
   return `<span class="proto-chip ${v[1]}">${v[0]}</span>`;
 }
@@ -1835,6 +1897,36 @@ function selectProto(val,el){
   document.querySelectorAll('.proto-card').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
 }
+function selectFrag(preset,el){
+  document.getElementById('nl-frag-preset').value = preset;
+  document.querySelectorAll('#frag-grid .frag-card').forEach(c=>c.classList.toggle('active',c.dataset.preset===preset));
+  document.getElementById('frag-custom').classList.toggle('show',preset==='custom');
+}
+function onElFragChange(){
+  document.getElementById('el-frag-custom').style.display=document.getElementById('el-frag-preset').value==='custom'?'flex':'none';
+}
+function collectFragment(prefix){
+  /* خروجی همیشه مطابق ساختار normalize_fragment در بک‌اند */
+  const p=document.getElementById(prefix+'-frag-preset');
+  if(!p)return null;
+  const preset=p.value||'off';
+  if(preset==='off')return {enabled:false,preset:'off'};
+  const frag={enabled:true,preset};
+  if(preset==='custom'){
+    frag.length=(document.getElementById(prefix+'-frag-length')||{}).value?.trim()||'100-200';
+    frag.interval=(document.getElementById(prefix+'-frag-interval')||{}).value?.trim()||'10-20';
+  }
+  return frag;
+}
+function resetFragmentUI(prefix){
+  const p=document.getElementById(prefix+'-frag-preset');
+  if(!p)return;
+  p.value='off';
+  const grid=prefix==='nl'?document.getElementById('frag-grid'):null;
+  if(grid)grid.querySelectorAll('.frag-card').forEach(c=>c.classList.toggle('active',c.dataset.preset==='off'));
+  const custom=prefix==='nl'?document.getElementById('frag-custom'):document.getElementById('el-frag-custom');
+  if(custom)custom.style.display='none';
+}
 function setIpLimit(n,el){
   document.getElementById('nl-iplimit').value = n;
   document.querySelectorAll('#iplimit-chips .chip').forEach(c=>c.classList.remove('active'));
@@ -1861,13 +1953,21 @@ overlay.addEventListener('click',closeSb);
 function navTo(name){
   document.querySelectorAll('.nav-it').forEach(n=>n.classList.toggle('on',n.dataset.pg===name));
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==='pg-'+name));
-  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:renderChangelog};
+  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:renderChangelog,monitor:loadMultiPath};
   if(loaders[name])loaders[name]();
   closeSb();window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.15',date:'۱۴۰۵/۰۵',title:'فرم کانفیگ کامل و موتور رلهٔ فوق‌سریع',items:[
+    {t:'new',x:'کارت Trojan در فرم ساخت کانفیگ + انتخابگر پروتکل در مودال ویرایش'},
+    {t:'new',x:'کارت‌های پکت فرگمنت (همراه اول، ایرانسل، داخلی، دستی) در فرم ساخت و ویرایش کانفیگ'},
+    {t:'new',x:'دکمه «صفحه مشتری» روی هر کارت کانفیگ (پیش‌نمایش /subinfo/{uuid})'},
+    {t:'new',x:'تب مستقل «پایش شبکه 📡» برای موتور ۴ مسیره و لودبالانسر هوشمند'},
+    {t:'fix',x:'بهینه‌سازی بزرگ رله: حذف قفل سراسری از مسیر داده + حسابداری دسته‌ای مصرف هر ۱ ثانیه + حذف strftime از مسیر داغ (تا ۵ برابر سریع‌تر در میکروبنچمارک)'},
+    {t:'fix',x:'تیونینگ سوکت TCP رله (TCP_NODELAY + بافرهای بزرگ‌تر) و فراخوانی throttle فقط برای کانفیگ‌های دارای محدودیت سرعت'},
+  ]},
   {v:'v9.14',date:'۱۴۰۵/۰۵',title:'جستجوی لحظه‌ای و پنل‌های مدیریتی جدید',items:[
     {t:'new',x:'جستجوی لحظه‌ای کانفیگ‌ها: نام، UUID، پروتکل، پورت، SNI، دامنه، لوکیشن و وضعیت'},
     {t:'new',x:'جستجوی لحظه‌ای گروه‌های ساب بر اساس نام، توضیح و کلید عمومی'},
@@ -2108,6 +2208,7 @@ async function loadLinks(){
         <span class="cfg-sub-tag" title="Fingerprint"><i class="ti ti-fingerprint"></i> ${esc(l.fingerprint||'chrome')}</span>
         <span class="cfg-sub-tag" title="آی‌پی‌های متصل / محدودیت"><i class="ti ti-users"></i> ${l.connected_ips||0}${l.ip_limit?('/'+l.ip_limit):' (∞)'}</span>
         <span class="cfg-sub-tag" title="محدودیت سرعت"><i class="ti ti-gauge"></i> ${l.speed_limit_bytes?((l.speed_limit_bytes*8/1024/1024).toFixed(1)+' Mbps'):'نامحدود'}</span>
+        ${l.fragment&&l.fragment.enabled?`<span class="cfg-sub-tag" title="پکت فرگمنت فعال"><i class="ti ti-scissors"></i> ${esc(l.fragment.preset||'فعال')}</span>`:''}
         ${l.sub_id&&allSubsList.find(s=>s.sub_id===l.sub_id)?`<span class="cfg-sub-tag"><i class="ti ti-folder"></i> ${esc(allSubsList.find(s=>s.sub_id===l.sub_id).name)}</span>`:''}
       </div>
       <div class="cfg-divider-v"></div>
@@ -2115,6 +2216,7 @@ async function loadLinks(){
         <button class="tog${allowed?' on':''}" onclick="toggleActive('${l.uuid}',${!l.active})" title="فعال/غیرفعال"></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.vless_link)}').then(()=>toast('لینک کپی شد','ok'))" title="کپی لینک"><i class="ti ti-copy"></i></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="navigator.clipboard.writeText('${esc(l.sub_url)}').then(()=>toast('Sub کپی شد','ok'))" title="Sub URL"><i class="ti ti-rss"></i></button>
+        <button class="btn btn-sm btn-g btn-icon" onclick="window.open('${esc(l.subinfo_url)}','_blank')" title="صفحه مشتری (پیش‌نمایش)"><i class="ti ti-id-badge"></i></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="showQR('${esc(l.vless_link)}')" title="QR"><i class="ti ti-qrcode"></i></button>
         <button class="btn btn-sm btn-amber btn-icon" onclick="openEditLink('${l.uuid}')" title="ویرایش"><i class="ti ti-edit"></i></button>
         <button class="btn btn-sm btn-g btn-icon" onclick="resetUsage('${l.uuid}')" title="ریست مصرف"><i class="ti ti-rotate"></i></button>
@@ -2145,8 +2247,9 @@ async function createLink(){
   const speed_limit_unit=document.getElementById('nl-speed-unit').value;
   const cdn_host=document.getElementById('nl-cdn').value.trim();
   const sni=document.getElementById('nl-sni').value.trim();
+  const fragment=collectFragment('nl');
   try{
-    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni})});
+    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni,fragment})});
     if(!r.ok)throw new Error('failed');
     ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn','nl-cdn','nl-sni'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nl-port').value='443';
@@ -2154,6 +2257,7 @@ async function createLink(){
     document.getElementById('nl-speed').value='0';
     document.getElementById('nl-alpn-preset').value='';
     document.getElementById('nl-alpn').style.display='none';
+    resetFragmentUI('nl');
     toast('کانفیگ ساخته شد ✓','ok');loadLinks();
   }catch(e){toast('خطا در ساخت','err')}
 }
@@ -2171,6 +2275,12 @@ function openEditLink(uuid){
   document.getElementById('el-alpn').value=l.alpn||'';
   document.getElementById('el-cdn').value=l.cdn_host||'';
   document.getElementById('el-sni').value=l.sni||'';
+  document.getElementById('el-proto').value=l.protocol||'vless-ws';
+  const f=l.fragment||{};
+  document.getElementById('el-frag-preset').value=(f.enabled&&f.preset)||'off';
+  document.getElementById('el-frag-length').value=f.length||'';
+  document.getElementById('el-frag-interval').value=f.interval||'';
+  onElFragChange();
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
@@ -2193,7 +2303,9 @@ async function saveEditLink(){
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
   const cdn_host=document.getElementById('el-cdn').value.trim();
   const sni=document.getElementById('el-sni').value.trim();
-  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni};
+  const protocol=document.getElementById('el-proto').value||'vless-ws';
+  const fragment=collectFragment('el');
+  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni,protocol,fragment};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -3134,7 +3246,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
   fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();loadMultiPath();loadBranding();loadBackup();loadWarp();
   setInterval(fetchStats,4000);
-  setInterval(()=>{if(document.getElementById('pg-settings')&&document.getElementById('pg-settings').classList.contains('on')){loadMultiPath();loadBackup();loadWarp();}},8000);
+  setInterval(()=>{const ps=document.getElementById('pg-settings'),pm=document.getElementById('pg-monitor');const psOn=ps&&ps.classList.contains('on'),pmOn=pm&&pm.classList.contains('on');if(pmOn)loadMultiPath();if(psOn){loadBackup();loadWarp();}},8000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
     if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();
@@ -3243,6 +3355,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 .pc-ws{{background:var(--accent-d);color:var(--accent2)}}
 .pc-xhttp{{background:var(--purple-bg);color:var(--purple-t)}}
 .pc-ultra{{background:var(--green-bg);color:var(--green-t)}}
+.pc-trojan{{background:var(--red-bg);color:var(--red-t)}}
 .cfg-status{{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap}}
 .cfg-status.ok{{background:var(--green-bg);color:var(--green-t)}}
 .cfg-status.no{{background:var(--red-bg);color:var(--red-t)}}
@@ -3386,6 +3499,7 @@ function fmtB(b){{if(!b||b===0)return '0 B';if(b<1024)return b+' B';if(b<1024**2
 function toFa(n){{return String(n).replace(/\\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}}
 function expiryLabel(value){{if(!value)return 'نامحدود';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleDateString('fa-IR')}}
 function protoChip(p){{
+  if(p==='trojan-ws')return '<span class="proto-chip pc-trojan"><i class="ti ti-shield-lock"></i> Trojan · WS</span>';
   if(p==='xhttp-stream-one')return '<span class="proto-chip pc-ultra"><i class="ti ti-bolt"></i> XHTTP ULTRA</span>';
   if(p&&p.startsWith('xhttp'))return '<span class="proto-chip pc-xhttp">'+esc(p)+'</span>';
   return '<span class="proto-chip pc-ws">VLESS · WS</span>';

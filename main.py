@@ -1527,6 +1527,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "expired": False,
         "vless_link": vless_link_for_link(link, uid, host),
         "sub_url": f"https://{host}/sub/{uid}",
+        "subinfo_url": f"https://{host}/subinfo/{uid}",
     }
 
 @app.get("/api/links")
@@ -1544,6 +1545,7 @@ async def list_links(request: Request, _=Depends(require_auth)):
             "expired": is_link_expired(d),
             "vless_link": vless_link_for_link(d, uid, host),
             "sub_url": f"https://{host}/sub/{uid}",
+            "subinfo_url": f"https://{host}/subinfo/{uid}",
             "connected_ips": len(unique_ips_for_uuid(uid)),
         })
     result.sort(key=lambda x: x["created_at"], reverse=True)
