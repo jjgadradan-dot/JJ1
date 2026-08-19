@@ -783,6 +783,7 @@ a{color:inherit;text-decoration:none}
     <div class="modal-title"><i class="ti ti-edit"></i> ویرایش کانفیگ</div>
     <input type="hidden" id="el-uuid">
     <div class="fg" style="margin-bottom:13px"><label>عنوان</label><input class="fi" id="el-label" style="width:100%"></div>
+    <div class="fg" style="margin-bottom:13px"><label>لوکیشن</label><input class="fi" id="el-location" placeholder="مثلاً آلمان" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:13px">
       <div class="fg" style="flex:1"><label>سهمیه (0 = نامحدود)</label><input class="fi" id="el-val" type="number" min="0" step="0.1" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-unit"><option value="GB">GB</option><option value="MB">MB</option></select></div>
@@ -967,6 +968,9 @@ a{color:inherit;text-decoration:none}
           <input class="cp-input-full" id="nl-label" placeholder="مثلاً: کاربر علی">
           <div class="cp-mini-row">
             <input class="cp-input-full" id="nl-note" placeholder="یادداشت (اختیاری)">
+          </div>
+          <div class="cp-mini-row">
+            <input class="cp-input-full" id="nl-location" placeholder="لوکیشن (مثلاً آلمان)">
           </div>
         </div>
         <div class="cp-block">
@@ -1744,6 +1748,7 @@ async function createLink(){
   const unit=document.getElementById('nl-unit').value;
   const exp=document.getElementById('nl-exp').value;
   const note=document.getElementById('nl-note').value.trim();
+  const location=document.getElementById('nl-location').value.trim();
   const sub_id=document.getElementById('nl-sub').value||null;
   const protocol=document.getElementById('nl-proto').value||'vless-ws';
   const fingerprint=document.getElementById('nl-fp').value||'chrome';
@@ -1753,9 +1758,9 @@ async function createLink(){
   const speed_limit_value=Number(document.getElementById('nl-speed').value)||0;
   const speed_limit_unit=document.getElementById('nl-speed-unit').value;
   try{
-    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit})});
+    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit})});
     if(!r.ok)throw new Error('failed');
-    ['nl-label','nl-val','nl-exp','nl-note','nl-alpn'].forEach(id=>document.getElementById(id).value='');
+    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
@@ -1770,6 +1775,7 @@ function openEditLink(uuid){
   document.getElementById('el-uuid').value=uuid;
   document.getElementById('el-label').value=l.label;
   document.getElementById('el-note').value=l.note||'';
+  document.getElementById('el-location').value=l.location||'';
   if(l.limit_bytes===0){document.getElementById('el-val').value='';document.getElementById('el-unit').value='GB';}
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
   document.getElementById('el-exp').value='';
@@ -1785,6 +1791,7 @@ async function saveEditLink(){
   const uuid=document.getElementById('el-uuid').value;
   const label=document.getElementById('el-label').value.trim();
   const note=document.getElementById('el-note').value.trim();
+  const location=document.getElementById('el-location').value.trim();
   const val=document.getElementById('el-val').value;
   const unit=document.getElementById('el-unit').value;
   const exp=document.getElementById('el-exp').value;
@@ -1794,7 +1801,7 @@ async function saveEditLink(){
   const ip_limit=Number(document.getElementById('el-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
-  const body={label,note,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
+  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -2431,6 +2438,10 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 .cfg-status.ok{{background:var(--green-bg);color:var(--green-t)}}
 .cfg-status.no{{background:var(--red-bg);color:var(--red-t)}}
 .cfg-usage{{margin-bottom:4px}}
+.cfg-details{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0 2px}}
+.cfg-detail{{background:var(--bg3);border:1px solid var(--card-b);border-radius:9px;padding:7px 8px;min-width:0}}
+.cfg-detail-k{{font-size:8.5px;color:var(--t3);display:flex;align-items:center;gap:3px;margin-bottom:3px}}
+.cfg-detail-v{{font-size:10px;font-weight:700;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .ubar{{height:6px;border-radius:4px;background:rgba(96,148,246,0.1);overflow:hidden;margin-bottom:5px}}
 .ubar-f{{height:100%;border-radius:4px;transition:width .5s ease}}
 .utxt{{font-size:10px;color:var(--t3);display:flex;justify-content:space-between}}
@@ -2510,6 +2521,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   .sub-name{{font-size:19px}}
   .copy-all-bar{{flex-direction:column;align-items:stretch}}
   .copy-all-btn{{justify-content:center}}
+  .cfg-details{{grid-template-columns:1fr}}
   .wrap{{padding:16px 12px 50px}}
   .lock-banner{{padding:32px 22px 22px}}
   .lock-form{{padding:20px 22px 26px}}
@@ -2563,6 +2575,7 @@ function toast(msg,type=''){{
 function esc(s){{return String(s||'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]))}}
 function fmtB(b){{if(!b||b===0)return '0 B';if(b<1024)return b+' B';if(b<1024**2)return (b/1024).toFixed(1)+' KB';if(b<1024**3)return (b/1024**2).toFixed(2)+' MB';return (b/1024**3).toFixed(2)+' GB'}}
 function toFa(n){{return String(n).replace(/\\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}}
+function expiryLabel(value){{if(!value)return 'نامحدود';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleDateString('fa-IR')}}
 function protoChip(p){{
   if(p==='xhttp-stream-one')return '<span class="proto-chip pc-ultra"><i class="ti ti-bolt"></i> XHTTP ULTRA</span>';
   if(p&&p.startsWith('xhttp'))return '<span class="proto-chip pc-xhttp">'+esc(p)+'</span>';
@@ -2704,6 +2717,11 @@ function renderContent(d){{
                   <div class="cfg-badges">
                     ${{protoChip(l.protocol)}}
                     ${{l.connections > 0 ? `<span class="conn-chip"><span class="dot"></span> ${{toFa(l.connections)}} اتصال</span>` : ''}}
+                  </div>
+                  <div class="cfg-details">
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-map-pin"></i> لوکیشن</div><div class="cfg-detail-v">${{esc(l.location || '—')}}</div></div>
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-database"></i> حجم</div><div class="cfg-detail-v">${{esc(l.used_fmt)}} / ${{esc(l.limit_fmt)}}</div></div>
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-calendar"></i> زمان</div><div class="cfg-detail-v">${{esc(expiryLabel(l.expires_at))}}</div></div>
                   </div>
                 </div>
                 <span class="cfg-status ${{l.active ? 'ok' : 'no'}}">${{l.active ? '<i class="ti ti-circle-check"></i> فعال' : '<i class="ti ti-circle-x"></i> غیرفعال'}}</span>
