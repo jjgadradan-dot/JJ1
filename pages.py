@@ -1,14 +1,14 @@
-# pages.py  -  RVG v9.7
+# pages.py  -  XR v9.7
 # شامل: LOGIN_HTML, DASHBOARD_HTML, get_public_page_html()
 
-# لوگوی RVG (به‌صورت base64 داخلی، بدون نیاز به هاست خارجی)
+# لوگوی XR (به‌صورت base64 داخلی، بدون نیاز به هاست خارجی)
 LOGO_B64 = "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"
 
 LOGIN_HTML = r"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ورود · RVG</title>
+<title>ورود · XR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
@@ -60,8 +60,8 @@ input:focus+.ic{color:var(--accent)}
 <div class="wrap">
   <div class="card">
     <div class="brand">
-      <div class="brand-img"><img src="data:image/png;base64,__LOGO_B64__" alt="RVG"></div>
-      <div><div class="brand-name">RVG</div><div class="brand-sub">v9.7</div></div>
+      <div class="brand-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.7</div></div>
     </div>
     <h1>ورود به پنل</h1>
     <p class="sub">رمز عبور را برای دسترسی به داشبورد وارد کنید</p>
@@ -106,7 +106,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RVG</title>
+<title>XR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
@@ -783,6 +783,7 @@ a{color:inherit;text-decoration:none}
     <div class="modal-title"><i class="ti ti-edit"></i> ویرایش کانفیگ</div>
     <input type="hidden" id="el-uuid">
     <div class="fg" style="margin-bottom:13px"><label>عنوان</label><input class="fi" id="el-label" style="width:100%"></div>
+    <div class="fg" style="margin-bottom:13px"><label>لوکیشن</label><input class="fi" id="el-location" placeholder="مثلاً آلمان" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:13px">
       <div class="fg" style="flex:1"><label>سهمیه (0 = نامحدود)</label><input class="fi" id="el-val" type="number" min="0" step="0.1" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-unit"><option value="GB">GB</option><option value="MB">MB</option></select></div>
@@ -827,13 +828,13 @@ a{color:inherit;text-decoration:none}
       <button class="modal-v2-close" onclick="closeModal('modal-create-node')"><i class="ti ti-x"></i></button>
       <div class="modal-v2-icon" style="background:linear-gradient(135deg,var(--accent),var(--green))"><i class="ti ti-server-2"></i></div>
       <div class="modal-v2-title">افزودن نود جدید</div>
-      <div class="modal-v2-sub">اتصال امن به RVG، Marzban یا 3x-ui از طریق API</div>
+      <div class="modal-v2-sub">اتصال امن به XR، Marzban یا 3x-ui از طریق API</div>
     </div>
     <div class="modal-v2-body">
       <div class="modal-v2-field"><label>نام نود</label><input class="modal-v2-input" id="node-name" placeholder="مثلاً سرور فرانسه"></div>
       <div class="modal-v2-field"><label>آدرس پنل</label><input class="modal-v2-input" id="node-url" dir="ltr" placeholder="https://panel.example.com"></div>
       <div class="form-row" style="margin-bottom:11px">
-        <div class="fg" style="flex:1"><label>نوع پنل</label><select class="fs" id="node-type" style="width:100%"><option value="rvg">RVG</option><option value="marzban">Marzban</option><option value="xui">3x-ui / X-UI</option></select></div>
+        <div class="fg" style="flex:1"><label>نوع پنل</label><select class="fs" id="node-type" style="width:100%"><option value="rvg">XR</option><option value="marzban">Marzban</option><option value="xui">3x-ui / X-UI</option></select></div>
         <div class="fg" style="flex:1"><label>روش ورود</label><select class="fs" id="node-auth" style="width:100%" onchange="toggleNodeAuth()"><option value="token">API Token</option><option value="credentials">نام کاربری و رمز</option></select></div>
       </div>
       <div id="node-token-wrap" class="modal-v2-field"><label>API Token</label><input class="modal-v2-input" id="node-token" type="password" dir="ltr" autocomplete="off"></div>
@@ -842,15 +843,15 @@ a{color:inherit;text-decoration:none}
         <div class="fg" style="flex:1"><label>رمز عبور</label><input class="fi" id="node-pass" type="password" style="width:100%" dir="ltr"></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t2);margin:10px 0"><input id="node-ssl" type="checkbox" checked> بررسی گواهی SSL</label>
-      <div class="cl"><i class="ti ti-shield-check"></i><span>قبل از ذخیره، اتصال و دسترسی API آزمایش می‌شود. برای RVG باید روی نود متغیر NODE_API_TOKEN تنظیم شده باشد.</span></div>
+      <div class="cl"><i class="ti ti-shield-check"></i><span>قبل از ذخیره، اتصال و دسترسی API آزمایش می‌شود. برای XR باید روی نود متغیر NODE_API_TOKEN تنظیم شده باشد.</span></div>
       <div class="modal-v2-footer"><button class="btn btn-o" onclick="closeModal('modal-create-node')">انصراف</button><button class="btn btn-p" id="node-save-btn" onclick="createNode()"><i class="ti ti-plug-connected"></i> تست و ذخیره</button></div>
     </div>
   </div>
 </div>
 <div class="mob-top">
   <div class="ml">
-    <div class="mob-logo"><img src="data:image/png;base64,__LOGO_B64__" alt="RVG"></div>
-    <span class="mob-title">RVG</span>
+    <div class="mob-logo"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
+    <span class="mob-title">XR</span>
   </div>
   <div class="mob-right">
     <button class="theme-mob" id="theme-mob-btn" onclick="toggleTheme()"><i class="ti ti-sun" id="theme-mob-icon"></i></button>
@@ -861,8 +862,8 @@ a{color:inherit;text-decoration:none}
 <aside class="sidebar" id="sb">
   <button class="sb-close" id="close-sb"><i class="ti ti-x"></i></button>
   <div class="logo">
-    <div class="logo-img"><img src="data:image/png;base64,__LOGO_B64__" alt="RVG"></div>
-    <div><div class="logo-name">RVG</div><div class="logo-sub">v9.7</div></div>
+    <div class="logo-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
+    <div><div class="logo-name">XR</div><div class="logo-sub">v9.7</div></div>
   </div>
   <div class="nav-wrap">
     <div class="nav-sec">پنل</div>
@@ -942,7 +943,7 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
   <div class="dash-footer">
-    <span class="df-text">RVG v9.7 · مستر + نود · Railway</span>
+    <span class="df-text">XR v9.7 · مستر + نود · Railway</span>
     <a class="df-link" href="https://t.me/Farajian2004f" target="_blank"><i class="ti ti-brand-telegram"></i> t.me/Farajian2004f</a>
     
   </div>
@@ -967,6 +968,9 @@ a{color:inherit;text-decoration:none}
           <input class="cp-input-full" id="nl-label" placeholder="مثلاً: کاربر علی">
           <div class="cp-mini-row">
             <input class="cp-input-full" id="nl-note" placeholder="یادداشت (اختیاری)">
+          </div>
+          <div class="cp-mini-row">
+            <input class="cp-input-full" id="nl-location" placeholder="لوکیشن (مثلاً آلمان)">
           </div>
         </div>
         <div class="cp-block">
@@ -1121,11 +1125,11 @@ a{color:inherit;text-decoration:none}
 </section>
 <section class="pg" id="pg-nodes">
   <div class="topbar">
-    <div><div class="tb-title"><i class="ti ti-server-2"></i> مدیریت نودها</div><div class="tb-sub">اتصال و مدیریت پنل‌های RVG، Marzban و 3x-ui از یک داشبورد</div></div>
+    <div><div class="tb-title"><i class="ti ti-server-2"></i> مدیریت نودها</div><div class="tb-sub">اتصال و مدیریت پنل‌های XR، Marzban و 3x-ui از یک داشبورد</div></div>
     <div class="tb-right"><span class="badge bg-blue" id="nodes-pg-cnt">۰ نود</span><button class="btn btn-p" onclick="openModal('modal-create-node')"><i class="ti ti-server-2"></i> افزودن نود</button></div>
   </div>
   <div class="cl" style="margin-top:0;margin-bottom:16px"><i class="ti ti-info-circle"></i><span>توکن و رمز نودها هرگز به مرورگر برگردانده نمی‌شوند. برای دریافت ساب تجمیعی ادمین از <code>/api/nodes-subscription</code> استفاده کنید.</span></div>
-  <div class="sub-grid" id="nodes-grid"><div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-server-off"></i></div><div class="subs-empty-v2-title">هنوز نودی اضافه نشده</div><div class="subs-empty-v2-sub">اولین پنل راه‌دور را به RVG متصل کنید</div></div></div>
+  <div class="sub-grid" id="nodes-grid"><div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-server-off"></i></div><div class="subs-empty-v2-title">هنوز نودی اضافه نشده</div><div class="subs-empty-v2-sub">اولین پنل راه‌دور را به XR متصل کنید</div></div></div>
 </section>
 <section class="pg" id="pg-master">
   <div class="topbar">
@@ -1172,15 +1176,15 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="pw-body">
         <div class="pw-field"><label>آدرس پنل مستر</label><input class="pw-input" id="master-url" dir="ltr" placeholder="https://master.example.com" style="padding-left:14px"></div>
-        <div class="pw-field"><label>نام نمایشی این نود روی مستر</label><input class="pw-input" id="master-name" placeholder="مثلاً RVG فرانسه" style="padding-left:14px"></div>
+        <div class="pw-field"><label>نام نمایشی این نود روی مستر</label><input class="pw-input" id="master-name" placeholder="مثلاً XR فرانسه" style="padding-left:14px"></div>
         <div class="form-row" style="margin-bottom:13px">
-          <div class="fg" style="flex:1"><label>نوع مستر</label><select class="fs" id="master-type" style="width:100%" onchange="toggleMasterAuth()"><option value="rvg">RVG</option><option value="generic">عمومی / سفارشی</option></select></div>
+          <div class="fg" style="flex:1"><label>نوع مستر</label><select class="fs" id="master-type" style="width:100%" onchange="toggleMasterAuth()"><option value="rvg">XR</option><option value="generic">عمومی / سفارشی</option></select></div>
           <div class="fg" style="flex:1"><label>ورود به مستر</label><select class="fs" id="master-auth" style="width:100%" onchange="toggleMasterAuth()"><option value="credentials">رمز ادمین</option><option value="token">API Token</option></select></div>
         </div>
         <div class="pw-field" id="master-token-wrap" style="display:none"><label>توکن پنل مستر</label><input class="pw-input" id="master-token" type="password" dir="ltr" autocomplete="off"></div>
         <div class="pw-field" id="master-pass-wrap"><label>رمز ادمین پنل مستر</label><input class="pw-input" id="master-pass" type="password" autocomplete="off"></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t2);margin:4px 0 14px"><input id="master-ssl" type="checkbox" checked> بررسی گواهی SSL</label>
-        <div class="cl" id="master-hint" style="margin-top:0;margin-bottom:14px"><i class="ti ti-shield-check"></i><span>برای RVG، با رمز ادمین مستر وارد می‌شود و این نود را با توکن API همین پنل ثبت می‌کند.</span></div>
+        <div class="cl" id="master-hint" style="margin-top:0;margin-bottom:14px"><i class="ti ti-shield-check"></i><span>برای XR، با رمز ادمین مستر وارد می‌شود و این نود را با توکن API همین پنل ثبت می‌کند.</span></div>
         <div id="master-live" style="font-size:11px;color:var(--t3);margin-bottom:12px;line-height:1.8">هنوز وصل نشده</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="pw-submit" style="flex:1" id="master-save-btn" onclick="connectMaster()"><i class="ti ti-plug-connected"></i> تست و اتصال</button>
@@ -1343,7 +1347,7 @@ a{color:inherit;text-decoration:none}
   <div class="chg-head">
     <div class="chg-head-icon"><i class="ti ti-versions"></i></div>
     <div class="chg-head-text">
-      <div class="chg-head-title">تاریخچه بروزرسانی‌های RVG</div>
+      <div class="chg-head-title">تاریخچه بروزرسانی‌های XR</div>
       <div class="chg-head-sub">فهرست امکانات جدید، بهبودها و رفع اشکال‌ها در هر نسخه</div>
     </div>
     <div class="chg-head-ver">نسخه فعلی: v9.7</div>
@@ -1419,8 +1423,8 @@ a{color:inherit;text-decoration:none}
     <div class="srv-hero">
       <div class="srv-hero-icon"><i class="ti ti-headset"></i></div>
       <div class="srv-hero-text">
-        <div class="srv-hero-domain">پشتیبانی RVG</div>
-        <div class="srv-hero-sub"><span class="dot dg pulse"></span> راه‌های ارتباطی با تیم RVG</div>
+        <div class="srv-hero-domain">پشتیبانی XR</div>
+        <div class="srv-hero-sub"><span class="dot dg pulse"></span> راه‌های ارتباطی با تیم XR</div>
       </div>
     </div>
     <div class="srv-tiles">
@@ -1539,18 +1543,18 @@ document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
   {v:'v9.7',date:'۱۴۰۵/۰۵',title:'مستر و نود همزمان',items:[
-    {t:'new',x:'این پنل هم مستر است (مدیریت RVG / Marzban / 3x-ui) و هم نود با API توکن‌دار'},
+    {t:'new',x:'این پنل هم مستر است (مدیریت XR / Marzban / 3x-ui) و هم نود با API توکن‌دار'},
     {t:'new',x:'API کامل /api/node/v1 برای آمار، کانفیگ، اتصالات و ساب با Bearer Token'},
     {t:'new',x:'ساخت، نمایش و چرخش توکن API از داخل پنل'},
     {t:'new',x:'فرم اتصال به پنل مستر دیگر برای ثبت خودکار این نود'},
     {t:'imp',x:'Heartbeat دوره‌ای به مستر و نمایش وضعیت اتصال در داشبورد'}
   ]},
   {v:'v9.6',date:'۱۴۰۵/۰۵',title:'مدیریت متمرکز چند نود',items:[
-    {t:'new',x:'اتصال به پنل‌های RVG، Marzban و 3x-ui از بخش نودها'},
+    {t:'new',x:'اتصال به پنل‌های XR، Marzban و 3x-ui از بخش نودها'},
     {t:'new',x:'پشتیبانی از API Token یا نام کاربری و رمز برای هر نود'},
     {t:'new',x:'مانیتورینگ کاربران، وضعیت، ترافیک و کانفیگ‌های پنل‌های راه‌دور'},
     {t:'new',x:'ساخت و حذف کانفیگ روی نود و خروجی سابسکریپشن تجمیعی'},
-    {t:'imp',x:'API اختصاصی امن برای اتصال پنل‌های RVG به یکدیگر'}
+    {t:'imp',x:'API اختصاصی امن برای اتصال پنل‌های XR به یکدیگر'}
   ]},
   {v:'v9.5',date:'۱۴۰۴/۰۵',title:'ربات تلگرام، گروه‌های ساب و صفحه تغییرات',items:[
     {t:'new',x:'بخش «تغییرات پنل» برای مشاهده تاریخچه کامل بروزرسانی‌ها'},
@@ -1585,7 +1589,7 @@ const CHANGELOG=[
     {t:'new',x:'ذخیره‌سازی وضعیت روی دیسک (x4g_state.json) به‌جای حافظه'},
     {t:'imp',x:'تغییر رمز عبور ادمین از داخل پنل با سنجش قدرت رمز'}
   ]},
-  {v:'v6.0',date:'۱۴۰۳/۱۲',title:'نسخه پایه RVG',items:[
+  {v:'v6.0',date:'۱۴۰۳/۱۲',title:'نسخه پایه XR',items:[
     {t:'new',x:'تونل VLESS روی WebSocket و HTTP Proxy داخلی'},
     {t:'new',x:'ساخت لینک‌های اختصاصی با محدودیت حجم (KB/MB/GB)'},
     {t:'new',x:'دیپلوی یک‌کلیکی روی Railway'}
@@ -1744,6 +1748,7 @@ async function createLink(){
   const unit=document.getElementById('nl-unit').value;
   const exp=document.getElementById('nl-exp').value;
   const note=document.getElementById('nl-note').value.trim();
+  const location=document.getElementById('nl-location').value.trim();
   const sub_id=document.getElementById('nl-sub').value||null;
   const protocol=document.getElementById('nl-proto').value||'vless-ws';
   const fingerprint=document.getElementById('nl-fp').value||'chrome';
@@ -1753,9 +1758,9 @@ async function createLink(){
   const speed_limit_value=Number(document.getElementById('nl-speed').value)||0;
   const speed_limit_unit=document.getElementById('nl-speed-unit').value;
   try{
-    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit})});
+    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit})});
     if(!r.ok)throw new Error('failed');
-    ['nl-label','nl-val','nl-exp','nl-note','nl-alpn'].forEach(id=>document.getElementById(id).value='');
+    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
@@ -1770,6 +1775,7 @@ function openEditLink(uuid){
   document.getElementById('el-uuid').value=uuid;
   document.getElementById('el-label').value=l.label;
   document.getElementById('el-note').value=l.note||'';
+  document.getElementById('el-location').value=l.location||'';
   if(l.limit_bytes===0){document.getElementById('el-val').value='';document.getElementById('el-unit').value='GB';}
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
   document.getElementById('el-exp').value='';
@@ -1785,6 +1791,7 @@ async function saveEditLink(){
   const uuid=document.getElementById('el-uuid').value;
   const label=document.getElementById('el-label').value.trim();
   const note=document.getElementById('el-note').value.trim();
+  const location=document.getElementById('el-location').value.trim();
   const val=document.getElementById('el-val').value;
   const unit=document.getElementById('el-unit').value;
   const exp=document.getElementById('el-exp').value;
@@ -1794,7 +1801,7 @@ async function saveEditLink(){
   const ip_limit=Number(document.getElementById('el-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
-  const body={label,note,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
+  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1971,14 +1978,14 @@ async function createNode(){
   }catch(e){toast(e.message,'err')}
   finally{btn.disabled=false;btn.innerHTML='<i class="ti ti-plug-connected"></i> تست و ذخیره'}
 }
-const NODE_TYPE_LABEL={rvg:'RVG',marzban:'Marzban',xui:'3x-ui'};
+const NODE_TYPE_LABEL={rvg:'XR',marzban:'Marzban',xui:'3x-ui'};
 async function loadNodes(){
   try{
     const r=await authF('/api/nodes'),d=await r.json(),nodes=d.nodes||[];
     document.getElementById('nodes-nb').textContent=nodes.length;
     document.getElementById('nodes-pg-cnt').textContent=toFa(nodes.length)+' نود';
     const grid=document.getElementById('nodes-grid');
-    if(!nodes.length){grid.innerHTML='<div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-server-off"></i></div><div class="subs-empty-v2-title">هنوز نودی اضافه نشده</div><div class="subs-empty-v2-sub">اولین پنل راه‌دور را به RVG متصل کنید</div></div>';return}
+    if(!nodes.length){grid.innerHTML='<div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-server-off"></i></div><div class="subs-empty-v2-title">هنوز نودی اضافه نشده</div><div class="subs-empty-v2-sub">اولین پنل راه‌دور را به XR متصل کنید</div></div>';return}
     grid.innerHTML=nodes.map(n=>{
       const o=n.last_overview||{},online=n.last_error?false:!!n.last_check;
       return `<div class="sub-card" id="node-${n.id}">
@@ -2015,7 +2022,7 @@ function toggleMasterAuth(){
   document.getElementById('master-token-wrap').style.display=token?'block':'none';
   document.getElementById('master-pass-wrap').style.display=(!rvg||token)?'none':'block';
   document.getElementById('master-hint').innerHTML=rvg
-    ?'<i class="ti ti-shield-check"></i><span>برای RVG، با رمز یا توکن مستر وارد می‌شود و این نود را با API همین پنل ثبت می‌کند.</span>'
+    ?'<i class="ti ti-shield-check"></i><span>برای XR، با رمز یا توکن مستر وارد می‌شود و این نود را با API همین پنل ثبت می‌کند.</span>'
     :'<i class="ti ti-info-circle"></i><span>برای پنل عمومی فقط سلامت آدرس بررسی می‌شود. توکن و آدرس API این نود را در مستر وارد کنید.</span>';
 }
 function renderMasterState(d){
@@ -2037,7 +2044,7 @@ function renderMasterState(d){
   bits.push(m.connected?'وضعیت: متصل':'وضعیت: قطع');
   if(m.last_ok)bits.push('آخرین ارتباط موفق: '+new Date(m.last_ok).toLocaleString('fa-IR'));
   if(m.last_error)bits.push('خطا: '+m.last_error);
-  if(m.registered)bits.push('روی مستر RVG ثبت شده');
+  if(m.registered)bits.push('روی مستر XR ثبت شده');
   document.getElementById('master-live').textContent=bits.join(' · ');
   document.getElementById('master-live').style.color=m.last_error?'var(--red-t)':(m.connected?'var(--green-t)':'var(--t3)');
 }
@@ -2342,7 +2349,7 @@ def get_public_page_html(uuid_key: str) -> str:
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>RVG Sub</title>
+<title>XR Sub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
@@ -2431,6 +2438,10 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 .cfg-status.ok{{background:var(--green-bg);color:var(--green-t)}}
 .cfg-status.no{{background:var(--red-bg);color:var(--red-t)}}
 .cfg-usage{{margin-bottom:4px}}
+.cfg-details{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0 2px}}
+.cfg-detail{{background:var(--bg3);border:1px solid var(--card-b);border-radius:9px;padding:7px 8px;min-width:0}}
+.cfg-detail-k{{font-size:8.5px;color:var(--t3);display:flex;align-items:center;gap:3px;margin-bottom:3px}}
+.cfg-detail-v{{font-size:10px;font-weight:700;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .ubar{{height:6px;border-radius:4px;background:rgba(96,148,246,0.1);overflow:hidden;margin-bottom:5px}}
 .ubar-f{{height:100%;border-radius:4px;transition:width .5s ease}}
 .utxt{{font-size:10px;color:var(--t3);display:flex;justify-content:space-between}}
@@ -2510,6 +2521,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   .sub-name{{font-size:19px}}
   .copy-all-bar{{flex-direction:column;align-items:stretch}}
   .copy-all-btn{{justify-content:center}}
+  .cfg-details{{grid-template-columns:1fr}}
   .wrap{{padding:16px 12px 50px}}
   .lock-banner{{padding:32px 22px 22px}}
   .lock-form{{padding:20px 22px 26px}}
@@ -2530,8 +2542,8 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 <div class="wrap">
   <div class="top">
     <div class="brand">
-      <div class="brand-img"><img src="data:image/png;base64,{LOGO_B64}" alt="RVG"></div>
-      <div><div class="brand-name">RVG</div><div class="brand-sub">v9.7</div></div>
+      <div class="brand-img"><img src="data:image/png;base64,{LOGO_B64}" alt="XR"></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.7</div></div>
     </div>
     <div class="top-actions">
       <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="تغییر تم"><i class="ti ti-sun" id="theme-icon"></i></button>
@@ -2541,7 +2553,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div id="root">
     <div class="empty-state"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>در حال بارگذاری...</div>
   </div>
-  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · RVG v9.7</div>
+  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.7</div>
 </div>
 <script>
 const UUID_KEY='{uuid_key}';
@@ -2563,6 +2575,7 @@ function toast(msg,type=''){{
 function esc(s){{return String(s||'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]))}}
 function fmtB(b){{if(!b||b===0)return '0 B';if(b<1024)return b+' B';if(b<1024**2)return (b/1024).toFixed(1)+' KB';if(b<1024**3)return (b/1024**2).toFixed(2)+' MB';return (b/1024**3).toFixed(2)+' GB'}}
 function toFa(n){{return String(n).replace(/\\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}}
+function expiryLabel(value){{if(!value)return 'نامحدود';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleDateString('fa-IR')}}
 function protoChip(p){{
   if(p==='xhttp-stream-one')return '<span class="proto-chip pc-ultra"><i class="ti ti-bolt"></i> XHTTP ULTRA</span>';
   if(p&&p.startsWith('xhttp'))return '<span class="proto-chip pc-xhttp">'+esc(p)+'</span>';
@@ -2704,6 +2717,11 @@ function renderContent(d){{
                   <div class="cfg-badges">
                     ${{protoChip(l.protocol)}}
                     ${{l.connections > 0 ? `<span class="conn-chip"><span class="dot"></span> ${{toFa(l.connections)}} اتصال</span>` : ''}}
+                  </div>
+                  <div class="cfg-details">
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-map-pin"></i> لوکیشن</div><div class="cfg-detail-v">${{esc(l.location || '—')}}</div></div>
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-database"></i> حجم</div><div class="cfg-detail-v">${{esc(l.used_fmt)}} / ${{esc(l.limit_fmt)}}</div></div>
+                    <div class="cfg-detail"><div class="cfg-detail-k"><i class="ti ti-calendar"></i> زمان</div><div class="cfg-detail-v">${{esc(expiryLabel(l.expires_at))}}</div></div>
                   </div>
                 </div>
                 <span class="cfg-status ${{l.active ? 'ok' : 'no'}}">${{l.active ? '<i class="ti ti-circle-check"></i> فعال' : '<i class="ti ti-circle-x"></i> غیرفعال'}}</span>

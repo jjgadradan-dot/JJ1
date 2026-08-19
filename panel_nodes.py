@@ -92,7 +92,7 @@ class PanelNodeClient:
         if self.kind == "rvg":
             if auth_type == "token":
                 if not token:
-                    raise NodeError("API Token نود RVG وارد نشده است")
+                    raise NodeError("API Token نود XR وارد نشده است")
                 self.client.headers["Authorization"] = f"Bearer {token}"
             else:
                 await self._request("POST", "/api/login", json={"password": password})
@@ -129,7 +129,7 @@ class PanelNodeClient:
             data = (await self._request("GET", path)).json()
             return {
                 "online": True,
-                "version": data.get("version", "RVG"),
+                "version": data.get("version", "XR"),
                 "users": data.get("links_count", 0),
                 "active": data.get("active_links", 0),
                 "connections": data.get("active_connections", 0),

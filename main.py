@@ -22,7 +22,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
-BRAND = "RVG"
+BRAND = "XR"
 VERSION = "9.7"
 
 logger = logging.getLogger(BRAND)
@@ -368,7 +368,7 @@ def now_ir() -> datetime:
 def generate_vless_link(
     uuid: str,
     host: str,
-    remark: str = BRAND,
+    remark: str = "",
     protocol: str = DEFAULT_PROTOCOL,
     fingerprint: str | None = None,
     alpn: str | None = None,
@@ -419,7 +419,7 @@ def vless_link_for_link(link: dict, uid: str, host: str) -> str:
     proto = link.get("protocol", DEFAULT_PROTOCOL)
     return generate_vless_link(
         uid, host,
-        remark=f"{BRAND}-{link.get('label','')}",
+        remark=str(link.get("label") or "").strip(),
         protocol=proto,
         fingerprint=link.get("fingerprint"),
         alpn=link.get("alpn"),
@@ -864,6 +864,7 @@ async def make_link(
     port: int = DEFAULT_PORT,
     ip_limit: int = 0,
     speed_limit_bytes: int = 0,
+    location: str = "",
 ) -> tuple[str, dict]:
     if protocol not in PROTOCOLS:
         protocol = DEFAULT_PROTOCOL
@@ -890,6 +891,7 @@ async def make_link(
             "port": port,
             "ip_limit": max(0, ip_limit),
             "speed_limit_bytes": max(0, speed_limit_bytes),
+            "location": (location or "").strip()[:60],
         }
     if sub_id:
         async with SUBS_LOCK:
@@ -1023,6 +1025,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         port=port,
         ip_limit=ip_limit,
         speed_limit_bytes=speed_limit_bytes,
+        location=body.get("location") or "",
     )
 
     host = get_host(request)
@@ -1070,6 +1073,8 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["label"] = str(body["label"])[:60]
         if "note" in body:
             link["note"] = str(body["note"])[:200]
+        if "location" in body:
+            link["location"] = str(body["location"] or "").strip()[:60]
         if "reset_usage" in body and body["reset_usage"]:
             link["used_bytes"] = 0
             log_activity("link", f"مصرف کانفیگ «{label}» ریست شد", "info")
@@ -1103,7 +1108,7 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["speed_limit_bytes"] = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
             from speed_limit import reset_bucket
             reset_bucket(uid)
-        if any(k in body for k in ("label", "note", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
+        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -1342,6 +1347,7 @@ def serialize_node_config(uid: str, link: dict, host: str) -> dict:
         "ip_limit": link.get("ip_limit", 0),
         "expires_at": link.get("expires_at"),
         "note": link.get("note") or "",
+        "location": link.get("location") or "",
         "created_at": link.get("created_at"),
         "is_default": bool(link.get("is_default")),
         "vless_link": vless_link_for_link(link, uid, host),
@@ -1394,6 +1400,7 @@ async def node_create_from_body(body: dict, request: Request) -> dict:
         port=int(body.get("port", DEFAULT_PORT) or DEFAULT_PORT),
         ip_limit=max(0, int(body.get("ip_limit", 0) or 0)),
         speed_limit_bytes=speed_limit_bytes,
+        location=body.get("location") or "",
     )
     return serialize_node_config(uid, link, get_host(request))
 
@@ -1637,6 +1644,8 @@ async def node_api_update_config(uid: str, request: Request, _=Depends(require_n
             link["label"] = str(body["label"])[:60]
         if "note" in body:
             link["note"] = str(body["note"])[:200]
+        if "location" in body:
+            link["location"] = str(body["location"] or "").strip()[:60]
         if body.get("reset_usage"):
             link["used_bytes"] = 0
         if "limit_bytes" in body:
@@ -1812,6 +1821,7 @@ async def public_sub_data(uuid_key: str, request: Request):
             "limit_bytes": link.get("limit_bytes", 0),
             "limit_fmt": "∞" if link.get("limit_bytes", 0) == 0 else fmt_bytes(link["limit_bytes"]),
             "expires_at": link.get("expires_at"),
+            "location": link.get("location", ""),
             "vless_link": vless_link_for_link(link, lid, host),
             "sub_url": f"https://{host}/sub/{lid}",
             "connections": conn_count,
