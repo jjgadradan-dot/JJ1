@@ -1,4 +1,4 @@
-# pages.py  -  XR v9.7
+# pages.py  -  XR v9.8
 # شامل: LOGIN_HTML, DASHBOARD_HTML, get_public_page_html()
 
 # لوگوی XR (به‌صورت base64 داخلی، بدون نیاز به هاست خارجی)
@@ -61,7 +61,7 @@ input:focus+.ic{color:var(--accent)}
   <div class="card">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.7</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.8</div></div>
     </div>
     <h1>ورود به پنل</h1>
     <p class="sub">رمز عبور را برای دسترسی به داشبورد وارد کنید</p>
@@ -422,6 +422,18 @@ a{color:inherit;text-decoration:none}
 .pw-submit{width:100%;justify-content:center;background:linear-gradient(135deg,var(--purple),#6D48D6);color:#fff;border:none;border-radius:12px;padding:12px;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 6px 18px rgba(139,92,246,.32);transition:.18s}
 .pw-submit:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(139,92,246,.42)}
 .pw-submit:active{transform:translateY(0) scale(.98)}
+/* ══════ دامنه اختصاصی / CDN (از Nyx Panel) ══════ */
+.cdn-panel{border-color:rgba(59,130,246,.28)}
+.cdn-panel::before{background:radial-gradient(circle,var(--accent-d),transparent 70%)}
+.cdn-panel .pw-hero-icon{background:linear-gradient(135deg,var(--accent),#38BDF8)}
+.cdn-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:800;padding:3px 10px;border-radius:20px;background:var(--accent-d);color:var(--t3);border:1px solid var(--card-b);vertical-align:middle;margin-right:6px}
+.cdn-badge.on{background:rgba(34,197,94,.15);color:#22c55e;border-color:rgba(34,197,94,.35)}
+.cdn-active-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--t2);background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.22);border-radius:10px;padding:9px 12px;margin:4px 0 12px}
+.cdn-active-row b{direction:ltr;unicode-bidi:embed;color:var(--accent2);font-family:ui-monospace,monospace;font-size:11px}
+.cdn-reset{background:transparent;border:1px solid var(--card-b);color:var(--t2);border-radius:12px;padding:12px 16px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;white-space:nowrap}
+.cdn-reset:hover{color:#f87171;border-color:rgba(248,113,113,.4)}
+.cdn-hint{font-size:10.5px;color:var(--t3);line-height:1.8;margin-top:10px;display:flex;gap:6px;align-items:flex-start}
+.cdn-hint i{margin-top:2px;flex-shrink:0;color:var(--accent)}
 
 /* ══════ اتصالات فعال - نسخه پیشرفته ══════ */
 .conn-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
@@ -811,6 +823,7 @@ a{color:inherit;text-decoration:none}
       <div class="fg" style="flex:1"><label>پورت اتصال</label><input class="fi" id="el-port" type="number" min="1" max="65535" style="width:100%"></div>
       <div class="fg" style="flex:1"><label>محدودیت آی‌پی (0 = نامحدود)</label><input class="fi" id="el-iplimit" type="number" min="0" step="1" style="width:100%"></div>
     </div>
+    <div class="fg" style="margin-bottom:16px"><label>دامنه CDN اختصاصی (اختیاری — خالی = سرور اصلی)</label><input class="fi" id="el-cdn" dir="ltr" placeholder="مثلاً cdn.mydomain.com" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:16px">
       <div class="fg" style="flex:1"><label>محدودیت سرعت (0 = نامحدود)</label><input class="fi" id="el-speed" type="number" min="0" step="0.5" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-speed-unit"><option value="MBIT">Mbps</option><option value="KB">KB/s</option><option value="MB">MB/s</option></select></div>
@@ -863,7 +876,7 @@ a{color:inherit;text-decoration:none}
   <button class="sb-close" id="close-sb"><i class="ti ti-x"></i></button>
   <div class="logo">
     <div class="logo-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-    <div><div class="logo-name">XR</div><div class="logo-sub">v9.7</div></div>
+    <div><div class="logo-name">XR</div><div class="logo-sub">v9.8</div></div>
   </div>
   <div class="nav-wrap">
     <div class="nav-sec">پنل</div>
@@ -880,7 +893,7 @@ a{color:inherit;text-decoration:none}
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
-    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v9.7</span></div>
+    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v9.8</span></div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
   </div>
@@ -943,7 +956,7 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
   <div class="dash-footer">
-    <span class="df-text">XR v9.7 · مستر + نود · Railway</span>
+    <span class="df-text">XR v9.8 · مستر + نود · Railway</span>
     <a class="df-link" href="https://t.me/Farajian2004f" target="_blank"><i class="ti ti-brand-telegram"></i> t.me/Farajian2004f</a>
     
   </div>
@@ -971,6 +984,9 @@ a{color:inherit;text-decoration:none}
           </div>
           <div class="cp-mini-row">
             <input class="cp-input-full" id="nl-location" placeholder="لوکیشن (مثلاً آلمان)">
+          </div>
+          <div class="cp-mini-row">
+            <input class="cp-input-full" id="nl-cdn" dir="ltr" placeholder="دامنه CDN اختصاصی (اختیاری) · مثل cdn.mydomain.com">
           </div>
         </div>
         <div class="cp-block">
@@ -1350,7 +1366,7 @@ a{color:inherit;text-decoration:none}
       <div class="chg-head-title">تاریخچه بروزرسانی‌های XR</div>
       <div class="chg-head-sub">فهرست امکانات جدید، بهبودها و رفع اشکال‌ها در هر نسخه</div>
     </div>
-    <div class="chg-head-ver">نسخه فعلی: v9.7</div>
+    <div class="chg-head-ver">نسخه فعلی: v9.8</div>
   </div>
   <div class="chg-filters" id="chg-filters">
     <button class="chg-fil on" data-f="all">همه</button>
@@ -1373,7 +1389,7 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="srv-tiles">
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-route"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پورت پیش‌فرض</div><div class="srv-tile-val">443 (TLS) · قابل تغییر در هر کانفیگ</div></div></div>
-        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v9.7</div></div></div>
+        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v9.8</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-brand-fastapi"></i></div><div class="srv-tile-text"><div class="srv-tile-label">فریم‌ورک</div><div class="srv-tile-val">FastAPI + Uvicorn</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-cloud"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پلتفرم</div><div class="srv-tile-val">Railway</div></div></div>
         <div class="srv-tile" style="grid-column:1/-1"><div class="srv-tile-icon"><i class="ti ti-device-floppy"></i></div><div class="srv-tile-text"><div class="srv-tile-label">ذخیره‌سازی</div><div class="srv-tile-val">JSON File (/data)</div></div></div>
@@ -1414,6 +1430,30 @@ a{color:inherit;text-decoration:none}
         </div>
         <button class="pw-submit" onclick="changePw()"><i class="ti ti-shield-check"></i> ذخیره رمز جدید</button>
       </div>
+    </div>
+  </div>
+  <div class="pw-panel cdn-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-cloud-cog"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">دامنه اختصاصی / CDN <span class="cdn-badge" id="cdn-badge">پیش‌فرض IP</span></div>
+        <div class="pw-hero-sub">با تنظیم یک دامنه CDN (Cloudflare، آروان و...)، همه کانفیگ‌ها و لینک‌های ساب با این دامنه ساخته می‌شوند به‌جای دامنه اصلی سرور — درست مثل Nyx Panel</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="pw-field" style="margin-bottom:6px">
+        <label>دامنه CDN / دامنه اختصاصی</label>
+        <input class="pw-input" type="text" id="cdn-inp" dir="ltr" placeholder="مثلاً: cdn.mydomain.com" style="padding-right:14px">
+      </div>
+      <div class="cdn-active-row" id="cdn-active-row" style="display:none">
+        <i class="ti ti-cloud-check"></i>
+        <span>دامنه فعال روی همه لینک‌ها: <b id="cdn-active-host">—</b></span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:180px" onclick="saveCdnDomain()"><i class="ti ti-cloud-download"></i> اعمال روی همه کانفیگ‌ها</button>
+        <button class="cdn-reset" id="cdn-reset-btn" style="display:none" onclick="clearCdnDomain()"><i class="ti ti-cloud-off"></i> حذف</button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>دامنه CDN سراسری روی <b>همه</b> کانفیگ‌ها و ساب‌ها اعمال می‌شود (فیلد <b dir="ltr">host/sni</b> و آدرس لینک‌های ساب). در هر کانفیگ هم می‌توانید یک دامنه CDN اختصاصی‌تر وارد کنید. متغیر محیطی <b dir="ltr">CDN_DOMAIN</b> مقدار اولیه را تعیین می‌کند.</span></div>
     </div>
   </div>
 </section>
@@ -1542,6 +1582,12 @@ function navTo(name){
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.8',date:'۱۴۰۵/۰۵',title:'دامنه اختصاصی و CDN (از Nyx Panel)',items:[
+    {t:'new',x:'دامنه اختصاصی / CDN سراسری در تنظیمات: با یک دامنه (Cloudflare، آروان و...) همه کانفیگ‌ها و لینک‌های ساب ساخته می‌شوند'},
+    {t:'new',x:'دامنه CDN اختصاصی برای هر کانفیگ در هنگام ساخت و ویرایش'},
+    {t:'new',x:'متغیر محیطی CDN_DOMAIN برای فعال‌سازی اولیه دامنه CDN'},
+    {t:'imp',x:'API جدید /api/cdn-domain برای تنظیم دامنه CDN از داخل پنل'}
+  ]},
   {v:'v9.7',date:'۱۴۰۵/۰۵',title:'مستر و نود همزمان',items:[
     {t:'new',x:'این پنل هم مستر است (مدیریت XR / Marzban / 3x-ui) و هم نود با API توکن‌دار'},
     {t:'new',x:'API کامل /api/node/v1 برای آمار، کانفیگ، اتصالات و ساب با Bearer Token'},
@@ -1666,7 +1712,7 @@ async function loadActivity(){
     if(!logs.length){el.innerHTML='';em.style.display='block';return}
     em.style.display='none';
     const icMap={ok:'ti-circle-check',err:'ti-circle-x',warn:'ti-alert-triangle',info:'ti-info-circle'};
-    const kindFa={link:'کانفیگ',sub:'گروه',auth:'ورود',connection:'اتصال',system:'سیستم',api:'API',master:'مستر',node:'نود'};
+    const kindFa={link:'کانفیگ',sub:'گروه',auth:'ورود',connection:'اتصال',system:'سیستم',api:'API',master:'مستر',node:'نود',settings:'تنظیمات'};
     el.innerHTML=logs.map(l=>`
       <div class="log-item">
         <div class="log-ic ${l.level}"><i class="ti ${icMap[l.level]||'ti-info-circle'}"></i></div>
@@ -1707,6 +1753,7 @@ async function loadLinks(){
         <div class="cfg-label">${esc(l.label)}</div>
         <div class="cfg-sub-meta">
           <span class="cfg-uuid-mini" onclick="navigator.clipboard.writeText('${l.uuid}').then(()=>toast('UUID کپی شد','ok'))" title="${l.uuid}"><i class="ti ti-fingerprint"></i> ${l.uuid.slice(0,10)}…</span>
+          ${l.cdn_host?`<span class="cfg-uuid-mini" style="background:rgba(34,197,94,.12);color:#22c55e" title="دامنه CDN اختصاصی این کانفیگ"><i class="ti ti-cloud"></i> ${esc(l.cdn_host)}</span>`:''}
           <span>${new Date(l.created_at).toLocaleDateString('fa-IR')}</span>
         </div>
       </div>
@@ -1757,10 +1804,11 @@ async function createLink(){
   const ip_limit=Number(document.getElementById('nl-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('nl-speed').value)||0;
   const speed_limit_unit=document.getElementById('nl-speed-unit').value;
+  const cdn_host=document.getElementById('nl-cdn').value.trim();
   try{
-    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit})});
+    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host})});
     if(!r.ok)throw new Error('failed');
-    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn'].forEach(id=>document.getElementById(id).value='');
+    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn','nl-cdn'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
@@ -1781,6 +1829,7 @@ function openEditLink(uuid){
   document.getElementById('el-exp').value='';
   document.getElementById('el-fp').value=l.fingerprint||'chrome';
   document.getElementById('el-alpn').value=l.alpn||'';
+  document.getElementById('el-cdn').value=l.cdn_host||'';
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
@@ -1801,7 +1850,8 @@ async function saveEditLink(){
   const ip_limit=Number(document.getElementById('el-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
-  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
+  const cdn_host=document.getElementById('el-cdn').value.trim();
+  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -2215,6 +2265,43 @@ async function changePw(){
     ['cp-cur','cp-new','cp-cf'].forEach(id=>document.getElementById(id).value='');
   }catch(e){toast('✗ '+e.message,'err')}
 }
+async function loadCdnDomain(){
+  try{
+    const r=await authF('/api/cdn-domain');
+    const d=await r.json();
+    const host=d.cdn_domain||'';
+    const inp=document.getElementById('cdn-inp');
+    if(inp)inp.value=host;
+    const badge=document.getElementById('cdn-badge'),row=document.getElementById('cdn-active-row'),reset=document.getElementById('cdn-reset-btn');
+    if(!badge)return;
+    if(host){
+      badge.textContent='فعال 🌐';badge.className='cdn-badge on';
+      document.getElementById('cdn-active-host').textContent=host;
+      row.style.display='flex';reset.style.display='inline-flex';
+    }else{
+      badge.textContent='پیش‌فرض IP';badge.className='cdn-badge';
+      row.style.display='none';reset.style.display='none';
+    }
+  }catch(e){console.error(e)}
+}
+async function saveCdnDomain(){
+  const domain=document.getElementById('cdn-inp').value.trim();
+  try{
+    const r=await authF('/api/cdn-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    toast(d.active?'دامنه CDN روی همه لینک‌ها اعمال شد ✓':'دامنه CDN حذف شد','ok');
+    loadCdnDomain();fetchDefaultVless();
+  }catch(e){toast('خطا در ذخیره دامنه CDN','err')}
+}
+async function clearCdnDomain(){
+  try{
+    const r=await authF('/api/cdn-domain',{method:'DELETE'});
+    if(!r.ok)throw new Error();
+    toast('دامنه CDN حذف شد — برگشت به حالت پیش‌فرض','ok');
+    loadCdnDomain();fetchDefaultVless();
+  }catch(e){toast('خطا','err')}
+}
 function togglePwField(id,btn){
   const inp=document.getElementById(id);
   const icon=btn.querySelector('i');
@@ -2324,7 +2411,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   initCharts();
   document.getElementById('set-host').textContent=location.host;
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
-  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();
+  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();
   setInterval(fetchStats,4000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
@@ -2543,7 +2630,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div class="top">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,{LOGO_B64}" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.7</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.8</div></div>
     </div>
     <div class="top-actions">
       <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="تغییر تم"><i class="ti ti-sun" id="theme-icon"></i></button>
@@ -2553,7 +2640,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div id="root">
     <div class="empty-state"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>در حال بارگذاری...</div>
   </div>
-  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.7</div>
+  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.8</div>
 </div>
 <script>
 const UUID_KEY='{uuid_key}';

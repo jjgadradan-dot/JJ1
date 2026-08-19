@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.7"
+VERSION = "9.8"
 
 logger = logging.getLogger(BRAND)
 
@@ -64,6 +64,10 @@ CONFIG = {
     "port": int(os.environ.get("PORT", 8000)),
     "secret": _load_or_create_secret(),
     "host": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost"),
+    # دامنه اختصاصی / CDN (مثل قابلیت CUSTOM_DOMAIN در Nyx Panel): وقتی تنظیم شود،
+    # همه کانفیگ‌ها، لینک‌های ساب و URLهای عمومی با این دامنه ساخته می‌شوند
+    # به‌جای IP/دامنه خود سرور. مقدار اولیه از متغیر محیطی CDN_DOMAIN خوانده می‌شود.
+    "cdn_domain": os.environ.get("CDN_DOMAIN", "").strip(),
 }
 
 app.add_middleware(
@@ -91,6 +95,9 @@ async def load_state():
                 MASTER.update(data["master"])
             if "password_hash" in data:
                 AUTH["password_hash"] = data["password_hash"]
+            cdn = data.get("cdn_domain")
+            if cdn:
+                CONFIG["cdn_domain"] = str(cdn).strip()
             logger.info(f"State loaded: {len(LINKS)} links, {len(SUBS)} subs")
     except Exception as e:
         logger.warning(f"Could not load state: {e}")
@@ -106,6 +113,7 @@ async def save_state():
                 "node_api": dict(NODE_API),
                 "master": dict(MASTER),
                 "password_hash": AUTH["password_hash"],
+                "cdn_domain": CONFIG.get("cdn_domain", ""),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -345,11 +353,42 @@ async def shutdown():
         await http_client.aclose()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def clean_cdn_domain(raw: str) -> str:
+    """پاک‌سازی دامنه اختصاصی/CDN دریافتی از کاربر یا متغیر محیطی.
+
+    مثل قابلیت CUSTOM_DOMAIN در Nyx Panel عمل می‌کند: پروتکل (http/https)،
+    مسیر، کوئری و فضای خالی حذف می‌شود تا فقط «دامنه:پورت» بماند.
+    """
+    d = (raw or "").strip()
+    if not d:
+        return ""
+    low = d.lower()
+    if low.startswith("https://"):
+        d = d[8:]
+    elif low.startswith("http://"):
+        d = d[7:]
+    for sep in ("/", "?", "#"):
+        if sep in d:
+            d = d.split(sep)[0]
+    return d.strip()
+
+def current_cdn_domain() -> str:
+    """دامنه CDN سراسری فعال (خالی = غیرفعال)."""
+    return (CONFIG.get("cdn_domain") or "").strip()
+
 def get_host(request: Request | None = None) -> str:
     """آدرس دامنه رو ترجیحاً از خودِ درخواست HTTP می‌گیره (هدر Host/X-Forwarded-Host)
     چون این همیشه دقیقاً همون دامنه‌ایه که کاربر واقعاً بهش وصل شده. متغیر محیطی
     RAILWAY_PUBLIC_DOMAIN فقط به‌عنوان fallback استفاده می‌شه، چون گاهی موقع بالا اومدن
-    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن."""
+    کانتینر هنوز مقداردهی نشده و باعث می‌شد لینک‌ها گاهی با "localhost" ساخته بشن.
+
+    اگر دامنه اختصاصی/CDN سراسری تنظیم شده باشد (از تنظیمات پنل یا متغیر CDN_DOMAIN)،
+    اولویت با همان است: همه کانفیگ‌ها و لینک‌های ساب با دامنه CDN ساخته می‌شوند
+    (مثل CUSTOM_DOMAIN در Nyx Panel).
+    """
+    cdn = current_cdn_domain()
+    if cdn:
+        return cdn
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
@@ -415,10 +454,12 @@ def generate_vless_link(
     return f"vless://{uuid}@{host}:{port_val}?{query}#{quote(remark)}"
 
 def vless_link_for_link(link: dict, uid: str, host: str) -> str:
-    """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه."""
+    """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه.
+    اگر برای همون کانفیگ دامنه CDN اختصاصی (cdn_host) تنظیم شده باشد، اون اولویت دارد."""
     proto = link.get("protocol", DEFAULT_PROTOCOL)
+    eff_host = (link.get("cdn_host") or "").strip() or host
     return generate_vless_link(
-        uid, host,
+        uid, eff_host,
         remark=str(link.get("label") or "").strip(),
         protocol=proto,
         fingerprint=link.get("fingerprint"),
@@ -764,6 +805,33 @@ async def api_change_password(request: Request, token=Depends(require_auth)):
     log_activity("auth", "رمز عبور پنل تغییر کرد", "ok")
     return {"ok": True}
 
+# ── CDN Custom Domain (از Nyx Panel) ─────────────────────────────────────────
+@app.get("/api/cdn-domain")
+async def api_get_cdn_domain(_=Depends(require_auth)):
+    cdn = current_cdn_domain()
+    return {"ok": True, "cdn_domain": cdn, "active": bool(cdn)}
+
+@app.post("/api/cdn-domain")
+async def api_set_cdn_domain(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    clean = clean_cdn_domain(body.get("domain") or "")
+    CONFIG["cdn_domain"] = clean
+    await save_state()
+    if clean:
+        log_activity("settings", f"دامنه اختصاصی / CDN فعال شد: {clean}", "ok")
+    else:
+        log_activity("settings", "دامنه اختصاصی / CDN غیرفعال شد (برگشت به حالت پیش‌فرض)", "warn")
+    return {"ok": True, "cdn_domain": clean, "active": bool(clean)}
+
+@app.delete("/api/cdn-domain")
+async def api_clear_cdn_domain(_=Depends(require_auth)):
+    was_active = bool(current_cdn_domain())
+    CONFIG["cdn_domain"] = ""
+    await save_state()
+    if was_active:
+        log_activity("settings", "دامنه اختصاصی / CDN غیرفعال شد (برگشت به حالت پیش‌فرض)", "warn")
+    return {"ok": True, "cdn_domain": "", "active": False}
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
 async def get_stats(_=Depends(require_auth)):
@@ -865,6 +933,7 @@ async def make_link(
     ip_limit: int = 0,
     speed_limit_bytes: int = 0,
     location: str = "",
+    cdn_host: str = "",
 ) -> tuple[str, dict]:
     if protocol not in PROTOCOLS:
         protocol = DEFAULT_PROTOCOL
@@ -892,6 +961,7 @@ async def make_link(
             "ip_limit": max(0, ip_limit),
             "speed_limit_bytes": max(0, speed_limit_bytes),
             "location": (location or "").strip()[:60],
+            "cdn_host": clean_cdn_domain(cdn_host),
         }
     if sub_id:
         async with SUBS_LOCK:
@@ -1026,6 +1096,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         ip_limit=ip_limit,
         speed_limit_bytes=speed_limit_bytes,
         location=body.get("location") or "",
+        cdn_host=body.get("cdn_host") or "",
     )
 
     host = get_host(request)
@@ -1108,7 +1179,9 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["speed_limit_bytes"] = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
             from speed_limit import reset_bucket
             reset_bucket(uid)
-        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
+        if "cdn_host" in body:
+            link["cdn_host"] = clean_cdn_domain(body.get("cdn_host") or "")
+        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -1348,6 +1421,7 @@ def serialize_node_config(uid: str, link: dict, host: str) -> dict:
         "expires_at": link.get("expires_at"),
         "note": link.get("note") or "",
         "location": link.get("location") or "",
+        "cdn_host": link.get("cdn_host") or "",
         "created_at": link.get("created_at"),
         "is_default": bool(link.get("is_default")),
         "vless_link": vless_link_for_link(link, uid, host),
@@ -1401,6 +1475,7 @@ async def node_create_from_body(body: dict, request: Request) -> dict:
         ip_limit=max(0, int(body.get("ip_limit", 0) or 0)),
         speed_limit_bytes=speed_limit_bytes,
         location=body.get("location") or "",
+        cdn_host=body.get("cdn_host") or "",
     )
     return serialize_node_config(uid, link, get_host(request))
 
