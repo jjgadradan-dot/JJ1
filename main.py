@@ -2402,4 +2402,14 @@ async def test_ws_redirect():
     return HTMLResponse(content="<script>location.href='/dashboard'</script>")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=CONFIG["port"], log_level="info", workers=1)
+    # ⚡ ws_max_size: پذیرش فریم‌های باینری بزرگ‌تر از سمت کلاینت (آپلینک حجیم)
+    #    بدون افت توان عملیاتی؛ backlog بالاتر برای جذب بهتر ترافیک هم‌زمان.
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=CONFIG["port"],
+        log_level="info",
+        workers=1,
+        ws_max_size=32 * 1024 * 1024,
+        backlog=4096,
+    )

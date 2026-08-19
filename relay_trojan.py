@@ -135,6 +135,7 @@ def parse_trojan_header(chunk: bytes, expected_hash: str):
 
 
 async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, uid: str, speed_limited: bool = False):
+    conn = connections[conn_id]  # یک بار لوک‌آپ، نه به‌ازای هر چانک
     try:
         while True:
             msg = await ws.receive()
@@ -149,7 +150,7 @@ async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, 
             if speed_limited:
                 await throttle(uid, len(data))
             stats["total_requests"] += 1
-            connections[conn_id]["bytes"] += len(data)
+            conn["bytes"] += len(data)
             writer.write(data)
             if writer.transport.get_write_buffer_size() > RELAY_BUF:
                 await writer.drain()
@@ -164,6 +165,7 @@ async def _ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, 
 
 async def _tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, uid: str, speed_limited: bool = False):
     """برخلاف VLESS، Trojan هیچ هدر پاسخی ندارد — داده خام برمی‌گردد."""
+    conn = connections[conn_id]  # یک بار لوک‌آپ، نه به‌ازای هر چانک
     try:
         while True:
             data = await reader.read(RELAY_BUF)
@@ -174,7 +176,7 @@ async def _tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, 
                 break
             if speed_limited:
                 await throttle(uid, len(data))
-            connections[conn_id]["bytes"] += len(data)
+            conn["bytes"] += len(data)
             await ws.send_bytes(data)
     except Exception:
         pass

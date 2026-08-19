@@ -32,25 +32,25 @@ from speed_limit import throttle
 
 router = APIRouter()
 
-XHTTP_BUF = 512 * 1024
+XHTTP_BUF = 1024 * 1024
 DOWNLINK_QUEUE_MAX = 512
 SESSION_IDLE_TIMEOUT = 30
 REAPER_INTERVAL = 10
 TCP_CONNECT_TIMEOUT = 10.0
 
 # ── تنظیمات موتور تطبیقی ──────────────────────────────────────────────────────
-SOCK_BUF_SIZE = 2 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
+SOCK_BUF_SIZE = 4 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
 
 # _AdaptiveFlow: بازه‌ی مجاز برای high-water تطبیقی (AIMD)
 FLOW_MIN_HW = 256 * 1024
-FLOW_MAX_HW = 16 * 1024 * 1024
+FLOW_MAX_HW = 32 * 1024 * 1024
 FLOW_START_HW = 2 * 1024 * 1024
 FLOW_FAST_DRAIN_MS = 2.0    # زیر این یعنی downstream خیلی سریعه → بافر مجاز رو زیاد کن
 FLOW_SLOW_DRAIN_MS = 25.0   # بالای این یعنی backpressure واقعی → فوری نصفش کن
 
 # _QuotaGate: بازه‌ی مجاز برای batch تطبیقی چک کوتا
 QUOTA_MIN_BATCH = 32 * 1024
-QUOTA_MAX_BATCH = 1 * 1024 * 1024
+QUOTA_MAX_BATCH = 2 * 1024 * 1024
 QUOTA_START_BATCH = 64 * 1024
 QUOTA_CHECK_INTERVAL = 0.2  # سقف زمانی؛ حتی اگر batch پر نشده، بعد این مدت چک کن
 
@@ -80,7 +80,7 @@ def _resp_headers(fp: str) -> dict:
 
 
 def _tune_socket(writer: asyncio.StreamWriter):
-    """TCP_NODELAY + بافرهای بزرگ‌تر سوکت برای کاهش سربار سیستم‌عامل روی ترافیک بالا."""
+    """TCP_NODELAY + بافرهای بزرگ‌تر سوکت + ACK سریع برای کاهش سربار سیستم‌عامل روی ترافیک بالا."""
     sock = writer.transport.get_extra_info("socket")
     if not sock:
         return
@@ -88,6 +88,12 @@ def _tune_socket(writer: asyncio.StreamWriter):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCK_BUF_SIZE)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCK_BUF_SIZE)
+        quickack = getattr(socket, "TCP_QUICKACK", None)
+        if quickack is not None:
+            sock.setsockopt(socket.IPPROTO_TCP, quickack, 1)
+        keepalive = getattr(socket, "SO_KEEPALIVE", None)
+        if keepalive is not None:
+            sock.setsockopt(socket.SOL_SOCKET, keepalive, 1)
     except OSError:
         pass
 
@@ -288,9 +294,13 @@ def ensure_reaper():
         _reaper_started = True
 
 
-async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue):
+async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue, conn_id: str):
+    """پمپ دانلینک: بدون قفل در مسیر داغ (dict.get تک‌رشته‌ای اتمی است) و بدون
+    صدا زدن throttle برای کانفیگ‌های بدون محدودیت سرعت (حالت رایج)."""
     first = True
     gate = _QuotaGate(uuid)  # دانلینک هم از همون گیت batched استفاده می‌کنه
+    conn = connections.get(conn_id)
+    speed_limited = int((LINKS.get(uuid) or {}).get("speed_limit_bytes", 0) or 0) > 0
     try:
         while True:
             data = await reader.read(XHTTP_BUF)
@@ -298,13 +308,10 @@ async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamR
                 break
             if not gate.add(len(data)):
                 break
-            await throttle(uuid, len(data))
-            async with XHTTP_LOCK:
-                sess = xhttp_sessions.get(session_id)
-            if sess:
-                c = connections.get(sess["conn_id"])
-                if c:
-                    c["bytes"] += len(data)
+            if speed_limited:
+                await throttle(uuid, len(data))
+            if conn:
+                conn["bytes"] += len(data)
             payload = (b"\x00\x00" + data) if first else data
             first = False
             await down_q.put(payload)
@@ -322,7 +329,7 @@ async def _open_tcp_for_session(session_id: str, uuid: str, sess: dict, first_ch
     sess["writer"] = writer
     sess["tcp_open"] = True
     sess["downlink_task"] = asyncio.create_task(
-        _pump_tcp_to_queue(session_id, uuid, reader, sess["down_q"])
+        _pump_tcp_to_queue(session_id, uuid, reader, sess["down_q"], sess["conn_id"])
     )
     asyncio.create_task(save_state())
 
@@ -439,6 +446,8 @@ async def stream_up_upload(uuid: str, session_id: str, request: Request):
 
     conn = connections[sess["conn_id"]]   # یک بار لوک‌آپ، نه هر چانک
     writer = sess["writer"]               # ممکنه هنوز None باشه
+    # ⚡ throttle فقط برای کانفیگ‌های دارای محدودیت سرعت صدا زده می‌شود (حالت رایج = بدون سربار)
+    speed_limited = int((LINKS.get(uuid) or {}).get("speed_limit_bytes", 0) or 0) > 0
 
     try:
         async for chunk in request.stream():
@@ -448,7 +457,8 @@ async def stream_up_upload(uuid: str, session_id: str, request: Request):
 
             if not gate.add(len(chunk)):
                 raise HTTPException(status_code=403, detail="quota/disabled/unknown")
-            await throttle(uuid, len(chunk))
+            if speed_limited:
+                await throttle(uuid, len(chunk))
 
             stats["total_requests"] += 1
             conn["bytes"] += len(chunk)
