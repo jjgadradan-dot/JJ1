@@ -23,7 +23,7 @@ from panel_nodes import MasterClient, NodeError, PanelNodeClient, extract_bearer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 # نام برند/پنل و پیشوند ثابت اسم کانفیگ‌ها — برای تغییر نام، فقط همین مقدار را عوض کنید
 BRAND = "XR"
-VERSION = "9.10"
+VERSION = "9.11"
 
 logger = logging.getLogger(BRAND)
 
@@ -200,8 +200,21 @@ MASTER: dict = {}
 MASTER_LOCK = asyncio.Lock()
 _heartbeat_task: asyncio.Task | None = None
 
-# پروتکل‌های پشتیبانی‌شده برای هر کانفیگ
-PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one")
+# پروتکل‌های پشتیبانی‌شده برای هر کانفیگ (VLESS/WS، سه مد XHTTP و Trojan/WS)
+from protocols import (
+    ALL_PROTOCOLS as PROTOCOLS,
+    DEFAULT_FRAGMENT_PRESET,
+    FRAGMENT_PACKET_MODES,
+    FRAGMENT_PRESETS,
+    PROTOCOL_LABELS,
+    build_trojan_link,
+    fragment_query_value,
+    fragment_summary_fa,
+    is_trojan,
+    normalize_fragment,
+    trojan_password,
+)
+
 DEFAULT_PROTOCOL = "vless-ws"
 
 # Fingerprint (uTLS) های قابل انتخاب برای هر کانفیگ
@@ -214,6 +227,7 @@ DEFAULT_ALPN_BY_PROTOCOL = {
     "xhttp-packet-up": "h2,http/1.1",
     "xhttp-stream-up": "h2,http/1.1",
     "xhttp-stream-one": "h2,http/1.1",
+    "trojan-ws": "http/1.1",
 }
 DEFAULT_PORT = 443
 MIN_PORT, MAX_PORT = 1, 65535
@@ -472,6 +486,7 @@ def generate_vless_link(
     alpn: str | None = None,
     port: int | None = None,
     sni: str | None = None,
+    fragment: dict | None = None,
 ) -> str:
     """می‌سازد VLESS share-link متناسب با پروتکل انتخاب‌شده (WS کلاسیک یا یکی از مدهای XHTTP).
     fingerprint / alpn / port در صورت ندادن، از پیش‌فرض‌های خود پروتکل استفاده می‌شوند.
@@ -485,6 +500,13 @@ def generate_vless_link(
     if not (MIN_PORT <= port_val <= MAX_PORT):
         port_val = DEFAULT_PORT
     sni_val = (sni or "").strip() or host
+
+    # 🔐 پروتکل Trojan ترابرد و قالب لینک جداگانه‌ای دارد
+    if is_trojan(protocol):
+        return build_trojan_link(
+            uuid, host, remark=remark, port=port_val, sni=sni_val,
+            fingerprint=fp, alpn=alpn_val, fragment=fragment,
+        )
 
     if protocol == "vless-ws":
         path = f"/ws/{uuid}"
@@ -513,6 +535,10 @@ def generate_vless_link(
             "fp": fp,
             "alpn": alpn_val,
         }
+    # ⚡ پکت فرگمنت: با شکستن ClientHello، DPI نمی‌تواند SNI را بخواند
+    frag = fragment_query_value(fragment)
+    if frag:
+        params["fragment"] = frag
     query = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     return f"vless://{uuid}@{host}:{port_val}?{query}#{quote(remark)}"
 
@@ -533,6 +559,7 @@ def vless_link_for_link(link: dict, uid: str, host: str) -> str:
         alpn=link.get("alpn"),
         port=link.get("port"),
         sni=sni,
+        fragment=link.get("fragment"),
     )
 
 def uptime() -> str:
@@ -1007,6 +1034,29 @@ async def api_multipath_config(request: Request, _=Depends(require_auth)):
     load_balancer.apply_settings()
     return {"ok": True, **multipath_full_status()}
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚡ پکت فرگمنت و پروتکل‌ها
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/fragment/presets")
+async def api_fragment_presets(_=Depends(require_auth)):
+    """پریست‌های آمادهٔ اپراتورهای ایران + حالت‌های مجاز بسته‌شکنی."""
+    return {
+        "ok": True,
+        "presets": list(FRAGMENT_PRESETS.values()),
+        "default": DEFAULT_FRAGMENT_PRESET,
+        "packet_modes": list(FRAGMENT_PACKET_MODES),
+    }
+
+@app.get("/api/protocols")
+async def api_protocols(_=Depends(require_auth)):
+    """پروتکل‌های پشتیبانی‌شده به همراه برچسب فارسی/انگلیسی."""
+    return {
+        "ok": True,
+        "protocols": [{"id": p, "label": PROTOCOL_LABELS.get(p, p)} for p in PROTOCOLS],
+        "default": DEFAULT_PROTOCOL,
+    }
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/stats")
 async def get_stats(_=Depends(require_auth)):
@@ -1110,6 +1160,7 @@ async def make_link(
     location: str = "",
     cdn_host: str = "",
     sni: str = "",
+    fragment: dict | None = None,
 ) -> tuple[str, dict]:
     if protocol not in PROTOCOLS:
         protocol = DEFAULT_PROTOCOL
@@ -1139,6 +1190,7 @@ async def make_link(
             "location": (location or "").strip()[:60],
             "cdn_host": clean_cdn_domain(cdn_host),
             "sni": (sni or "").strip()[:100],
+            "fragment": normalize_fragment(fragment),
         }
     if sub_id:
         async with SUBS_LOCK:
@@ -1275,6 +1327,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         location=body.get("location") or "",
         cdn_host=body.get("cdn_host") or "",
         sni=body.get("sni") or "",
+        fragment=body.get("fragment"),
     )
 
     host = get_host(request)
@@ -1361,7 +1414,13 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["cdn_host"] = clean_cdn_domain(body.get("cdn_host") or "")
         if "sni" in body:
             link["sni"] = (body.get("sni") or "").strip()[:100]
-        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host", "sni")):
+        if "protocol" in body:
+            pr = str(body.get("protocol") or DEFAULT_PROTOCOL).strip().lower()
+            link["protocol"] = pr if pr in PROTOCOLS else DEFAULT_PROTOCOL
+        if "fragment" in body:
+            # ⚡ تنظیمات پکت فرگمنت (پریست اپراتور یا مقادیر دستی)
+            link["fragment"] = normalize_fragment(body.get("fragment"))
+        if any(k in body for k in ("label", "note", "location", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value", "cdn_host", "sni", "protocol", "fragment")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -2014,6 +2073,13 @@ from relay_vless import (
 )
 
 app.add_api_websocket_route("/ws/{uuid}", websocket_tunnel)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔐 Trojan Relay — رلهٔ واقعی پروتکل Trojan روی WebSocket
+# ══════════════════════════════════════════════════════════════════════════════
+from relay_trojan import trojan_tunnel
+
+app.add_api_websocket_route("/trojan/{uuid}", trojan_tunnel)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # XHTTP — Siz10a XHTTP Ultra (ترابرد جدید، جدا از VLESS/WS، هر ۳ مد)
