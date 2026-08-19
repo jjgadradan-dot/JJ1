@@ -1,4 +1,4 @@
-# pages.py  -  XR v9.8
+# pages.py  -  XR v9.9
 # شامل: LOGIN_HTML, DASHBOARD_HTML, get_public_page_html()
 
 # لوگوی XR (به‌صورت base64 داخلی، بدون نیاز به هاست خارجی)
@@ -61,7 +61,7 @@ input:focus+.ic{color:var(--accent)}
   <div class="card">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.8</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.9</div></div>
     </div>
     <h1>ورود به پنل</h1>
     <p class="sub">رمز عبور را برای دسترسی به داشبورد وارد کنید</p>
@@ -434,6 +434,23 @@ a{color:inherit;text-decoration:none}
 .cdn-reset:hover{color:#f87171;border-color:rgba(248,113,113,.4)}
 .cdn-hint{font-size:10.5px;color:var(--t3);line-height:1.8;margin-top:10px;display:flex;gap:6px;align-items:flex-start}
 .cdn-hint i{margin-top:2px;flex-shrink:0;color:var(--accent)}
+/* ══════ سامانه سوئیچ خودکار SNI (Auto-Failover از Nyx Panel) ══════ */
+.af-panel{border-color:rgba(168,85,247,.28)}
+.af-panel::before{background:radial-gradient(circle,rgba(168,85,247,.12),transparent 70%)}
+.af-panel .pw-hero-icon{background:linear-gradient(135deg,#8B5CF6,#38BDF8)}
+.af-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:800;padding:3px 10px;border-radius:20px;background:var(--accent-d);color:var(--t3);border:1px solid var(--card-b);vertical-align:middle;margin-right:6px}
+.af-badge.on{background:rgba(34,197,94,.15);color:#22c55e;border-color:rgba(34,197,94,.35)}
+.af-badge.off{background:rgba(248,113,113,.12);color:#f87171;border-color:rgba(248,113,113,.3)}
+.af-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:4px 0 14px}
+.af-tile{background:rgba(0,0,0,.18);border:1px solid var(--card-b);border-radius:12px;padding:9px 12px}
+.af-tile-label{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.af-tile-val{font-size:11.5px;font-weight:700;color:var(--t1);font-family:ui-monospace,monospace;direction:ltr;text-align:right}
+.af-tile-val.fa{direction:rtl;font-family:inherit}
+.af-history{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:190px;overflow-y:auto}
+.af-h-item{background:rgba(0,0,0,.18);border:1px solid var(--card-b);border-radius:10px;padding:8px 11px;font-size:10.5px;color:var(--t2);line-height:1.7}
+.af-h-item b{direction:ltr;unicode-bidi:embed;font-family:ui-monospace,monospace;color:#f87171}
+.af-h-item b.ok{color:#22c55e}
+.af-h-time{font-size:9px;color:var(--t3)}
 
 /* ══════ اتصالات فعال - نسخه پیشرفته ══════ */
 .conn-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
@@ -823,7 +840,8 @@ a{color:inherit;text-decoration:none}
       <div class="fg" style="flex:1"><label>پورت اتصال</label><input class="fi" id="el-port" type="number" min="1" max="65535" style="width:100%"></div>
       <div class="fg" style="flex:1"><label>محدودیت آی‌پی (0 = نامحدود)</label><input class="fi" id="el-iplimit" type="number" min="0" step="1" style="width:100%"></div>
     </div>
-    <div class="fg" style="margin-bottom:16px"><label>دامنه CDN اختصاصی (اختیاری — خالی = سرور اصلی)</label><input class="fi" id="el-cdn" dir="ltr" placeholder="مثلاً cdn.mydomain.com" style="width:100%"></div>
+    <div class="fg" style="margin-bottom:13px"><label>دامنه CDN اختصاصی (اختیاری — خالی = سرور اصلی)</label><input class="fi" id="el-cdn" dir="ltr" placeholder="مثلاً cdn.mydomain.com" style="width:100%"></div>
+    <div class="fg" style="margin-bottom:16px"><label>SNI (اختیاری — خالی = host؛ در صورت مسدودی توسط دیمون Auto-Failover خودکار سوئیچ می‌شود)</label><input class="fi" id="el-sni" dir="ltr" placeholder="مثلاً ebanking.banksepah.ir" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:16px">
       <div class="fg" style="flex:1"><label>محدودیت سرعت (0 = نامحدود)</label><input class="fi" id="el-speed" type="number" min="0" step="0.5" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-speed-unit"><option value="MBIT">Mbps</option><option value="KB">KB/s</option><option value="MB">MB/s</option></select></div>
@@ -876,7 +894,7 @@ a{color:inherit;text-decoration:none}
   <button class="sb-close" id="close-sb"><i class="ti ti-x"></i></button>
   <div class="logo">
     <div class="logo-img"><img src="data:image/png;base64,__LOGO_B64__" alt="XR"></div>
-    <div><div class="logo-name">XR</div><div class="logo-sub">v9.8</div></div>
+    <div><div class="logo-name">XR</div><div class="logo-sub">v9.9</div></div>
   </div>
   <div class="nav-wrap">
     <div class="nav-sec">پنل</div>
@@ -893,7 +911,7 @@ a{color:inherit;text-decoration:none}
     <div class="nav-it" data-pg="logs"><i class="ti ti-history"></i> لاگ فعالیت‌ها</div>
     <div class="nav-it" data-pg="errors"><i class="ti ti-alert-triangle"></i> خطاها</div>
     <div class="nav-it" data-pg="testws"><i class="ti ti-wifi"></i> تست WebSocket</div>
-    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v9.8</span></div>
+    <div class="nav-it" data-pg="changelog"><i class="ti ti-rocket"></i> تغییرات پنل <span class="nav-badge">v9.9</span></div>
     <div class="nav-it" data-pg="settings"><i class="ti ti-settings"></i> تنظیمات</div>
     <div class="nav-it" data-pg="support"><i class="ti ti-headset"></i> پشتیبانی</div>
   </div>
@@ -956,7 +974,7 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
   <div class="dash-footer">
-    <span class="df-text">XR v9.8 · مستر + نود · Railway</span>
+    <span class="df-text">XR v9.9 · مستر + نود · Railway</span>
     <a class="df-link" href="https://t.me/Farajian2004f" target="_blank"><i class="ti ti-brand-telegram"></i> t.me/Farajian2004f</a>
     
   </div>
@@ -987,6 +1005,9 @@ a{color:inherit;text-decoration:none}
           </div>
           <div class="cp-mini-row">
             <input class="cp-input-full" id="nl-cdn" dir="ltr" placeholder="دامنه CDN اختصاصی (اختیاری) · مثل cdn.mydomain.com">
+          </div>
+          <div class="cp-mini-row">
+            <input class="cp-input-full" id="nl-sni" dir="ltr" placeholder="SNI (اختیاری) · مثل ebanking.banksepah.ir · پایش خودکار توسط Auto-Failover">
           </div>
         </div>
         <div class="cp-block">
@@ -1366,7 +1387,7 @@ a{color:inherit;text-decoration:none}
       <div class="chg-head-title">تاریخچه بروزرسانی‌های XR</div>
       <div class="chg-head-sub">فهرست امکانات جدید، بهبودها و رفع اشکال‌ها در هر نسخه</div>
     </div>
-    <div class="chg-head-ver">نسخه فعلی: v9.8</div>
+    <div class="chg-head-ver">نسخه فعلی: v9.9</div>
   </div>
   <div class="chg-filters" id="chg-filters">
     <button class="chg-fil on" data-f="all">همه</button>
@@ -1389,7 +1410,7 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="srv-tiles">
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-route"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پورت پیش‌فرض</div><div class="srv-tile-val">443 (TLS) · قابل تغییر در هر کانفیگ</div></div></div>
-        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v9.8</div></div></div>
+        <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v9.9</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-brand-fastapi"></i></div><div class="srv-tile-text"><div class="srv-tile-label">فریم‌ورک</div><div class="srv-tile-val">FastAPI + Uvicorn</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-cloud"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پلتفرم</div><div class="srv-tile-val">Railway</div></div></div>
         <div class="srv-tile" style="grid-column:1/-1"><div class="srv-tile-icon"><i class="ti ti-device-floppy"></i></div><div class="srv-tile-text"><div class="srv-tile-label">ذخیره‌سازی</div><div class="srv-tile-val">JSON File (/data)</div></div></div>
@@ -1454,6 +1475,34 @@ a{color:inherit;text-decoration:none}
         <button class="cdn-reset" id="cdn-reset-btn" style="display:none" onclick="clearCdnDomain()"><i class="ti ti-cloud-off"></i> حذف</button>
       </div>
       <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>دامنه CDN سراسری روی <b>همه</b> کانفیگ‌ها و ساب‌ها اعمال می‌شود (فیلد <b dir="ltr">host/sni</b> و آدرس لینک‌های ساب). در هر کانفیگ هم می‌توانید یک دامنه CDN اختصاصی‌تر وارد کنید. متغیر محیطی <b dir="ltr">CDN_DOMAIN</b> مقدار اولیه را تعیین می‌کند.</span></div>
+    </div>
+  </div>
+  <div class="pw-panel af-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-shield-bolt"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">سامانه سوئیچ خودکار SNI در زمان قطعی نت <span class="af-badge" id="af-badge">در حال بارگذاری...</span></div>
+        <div class="pw-hero-sub">پایش زنده TLS دامنه‌های SNI کانفیگ‌ها هر ۶۰ ثانیه و سوئیچ خودکار به دامنه‌های لیست سفید در زمان فیلتر شدن — بدون تغییر لینک کاربران (از Nyx Panel)</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">آخرین پایش</div><div class="af-tile-val fa" id="af-lastcheck">—</div></div>
+        <div class="af-tile"><div class="af-tile-label">بررسی‌شده</div><div class="af-tile-val" id="af-checked">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">سوئیچ‌شده</div><div class="af-tile-val" id="af-switched">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">بازه (ثانیه)</div><div class="af-tile-val" id="af-interval">۶۰</div></div>
+      </div>
+      <div class="pw-field" style="margin-bottom:6px">
+        <label>SNI پیش‌فرض سراسری (خالی = هاست سرور)</label>
+        <input class="pw-input" type="text" id="af-sni" dir="ltr" placeholder="مثلاً: ebanking.banksepah.ir" style="padding-right:14px">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:150px" onclick="saveAutoFailover()"><i class="ti ti-shield-check"></i> ذخیره تنظیمات</button>
+        <button class="pw-submit" style="flex:1;min-width:150px;background:linear-gradient(135deg,#8B5CF6,#38BDF8)" onclick="triggerAutoFailover()"><i class="ti ti-bolt"></i> پایش و سوئیچ (دستی)</button>
+        <button class="cdn-reset" id="af-toggle-btn" onclick="toggleAutoFailover()"><i class="ti ti-power"></i> <span id="af-toggle-lbl">غیرفعال‌سازی</span></button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>دیمون هر <b dir="ltr">۶۰</b> ثانیه SNI کانفیگ‌های فعال را با یک TLS handshake واقعی تست می‌کند. اگر دامنه‌ای مسدود شده باشد، سالم‌ترین دامنه از لیست سفید (بانک‌ها، آروان، دیجی‌کالا و...) را جایگزین می‌کند و به تلگرام ادمین هشدار می‌دهد. کانفیگ‌هایی که SNI اختصاصی ندارند از SNI سراسری استفاده می‌کنند.</span></div>
+      <div class="af-history" id="af-history"><div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز سوئیچی ثبت نشده</div></div>
     </div>
   </div>
 </section>
@@ -1582,6 +1631,13 @@ function navTo(name){
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.9',date:'۱۴۰۵/۰۵',title:'سامانه هوشمند سوئیچ خودکار SNI (از Nyx Panel)',items:[
+    {t:'new',x:'دیمون Auto-Failover: پایش زنده TLS دامنه‌های SNI کانفیگ‌ها هر ۶۰ ثانیه و سوئیچ خودکار به لیست سفید در زمان فیلتر شدن'},
+    {t:'new',x:'فیلد SNI اختصاصی برای هر کانفیگ + SNI پیش‌فرض سراسری در تنظیمات'},
+    {t:'new',x:'هشدار فوری تلگرام + دکمه «سوئیچ خودکار SNI» در ربات و پنل'},
+    {t:'new',x:'API جدید /api/auto-failover برای وضعیت، اجرای دستی و تنظیمات'},
+    {t:'imp',x:'سوئیچ بدون تغییر لینک کاربران — فقط SNI داخل لینک‌ها عوض می‌شود'}
+  ]},
   {v:'v9.8',date:'۱۴۰۵/۰۵',title:'دامنه اختصاصی و CDN (از Nyx Panel)',items:[
     {t:'new',x:'دامنه اختصاصی / CDN سراسری در تنظیمات: با یک دامنه (Cloudflare، آروان و...) همه کانفیگ‌ها و لینک‌های ساب ساخته می‌شوند'},
     {t:'new',x:'دامنه CDN اختصاصی برای هر کانفیگ در هنگام ساخت و ویرایش'},
@@ -1754,6 +1810,7 @@ async function loadLinks(){
         <div class="cfg-sub-meta">
           <span class="cfg-uuid-mini" onclick="navigator.clipboard.writeText('${l.uuid}').then(()=>toast('UUID کپی شد','ok'))" title="${l.uuid}"><i class="ti ti-fingerprint"></i> ${l.uuid.slice(0,10)}…</span>
           ${l.cdn_host?`<span class="cfg-uuid-mini" style="background:rgba(34,197,94,.12);color:#22c55e" title="دامنه CDN اختصاصی این کانفیگ"><i class="ti ti-cloud"></i> ${esc(l.cdn_host)}</span>`:''}
+          ${l.sni?`<span class="cfg-uuid-mini" style="background:rgba(168,85,247,.14);color:#c084fc" title="SNI این کانفیگ (پایش خودکار توسط Auto-Failover)"><i class="ti ti-shield-lock"></i> ${esc(l.sni)}</span>`:''}
           <span>${new Date(l.created_at).toLocaleDateString('fa-IR')}</span>
         </div>
       </div>
@@ -1805,10 +1862,11 @@ async function createLink(){
   const speed_limit_value=Number(document.getElementById('nl-speed').value)||0;
   const speed_limit_unit=document.getElementById('nl-speed-unit').value;
   const cdn_host=document.getElementById('nl-cdn').value.trim();
+  const sni=document.getElementById('nl-sni').value.trim();
   try{
-    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host})});
+    const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val||0,limit_unit:unit,expires_days:exp||0,note,location,sub_id,protocol,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni})});
     if(!r.ok)throw new Error('failed');
-    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn','nl-cdn'].forEach(id=>document.getElementById(id).value='');
+    ['nl-label','nl-val','nl-exp','nl-note','nl-location','nl-alpn','nl-cdn','nl-sni'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nl-port').value='443';
     document.getElementById('nl-iplimit').value='0';
     document.getElementById('nl-speed').value='0';
@@ -1830,6 +1888,7 @@ function openEditLink(uuid){
   document.getElementById('el-fp').value=l.fingerprint||'chrome';
   document.getElementById('el-alpn').value=l.alpn||'';
   document.getElementById('el-cdn').value=l.cdn_host||'';
+  document.getElementById('el-sni').value=l.sni||'';
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
@@ -1851,7 +1910,8 @@ async function saveEditLink(){
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
   const cdn_host=document.getElementById('el-cdn').value.trim();
-  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host};
+  const sni=document.getElementById('el-sni').value.trim();
+  const body={label,note,location,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,cdn_host,sni};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -2302,6 +2362,57 @@ async function clearCdnDomain(){
     loadCdnDomain();fetchDefaultVless();
   }catch(e){toast('خطا','err')}
 }
+async function loadAutoFailover(){
+  try{
+    const r=await authF('/api/auto-failover/status');
+    const d=await r.json();
+    const badge=document.getElementById('af-badge');
+    if(!badge)return;
+    const on=d.enabled&&d.running;
+    badge.textContent=on?'فعال 🛡️':(d.enabled?'در انتظار':'غیرفعال');
+    badge.className='af-badge '+(on?'on':'off');
+    document.getElementById('af-lastcheck').textContent=d.last_check?new Date(d.last_check).toLocaleString('fa-IR'):'—';
+    document.getElementById('af-checked').textContent=toFa(d.last_checked_count||0);
+    document.getElementById('af-switched').textContent=toFa(d.last_switched_count||0);
+    document.getElementById('af-interval').textContent=toFa(d.interval||60);
+    document.getElementById('af-sni').value=d.default_sni||'';
+    document.getElementById('af-toggle-lbl').textContent=d.enabled?'غیرفعال‌سازی':'فعال‌سازی';
+    const box=document.getElementById('af-history');
+    const hist=d.history||[];
+    if(!hist.length){box.innerHTML='<div class="af-h-item" style="text-align:center;color:var(--t3)">هنوز سوئیچی ثبت نشده</div>';}
+    else{
+      box.innerHTML=hist.map(h=>`<div class="af-h-item"><b>${esc(h.old_sni)}</b> ➡️ <b class="ok">${esc(h.new_sni)}</b> · ${toFa(h.latency_ms)}ms<br><span class="af-h-time"><i class="ti ti-clock"></i> ${new Date(h.timestamp).toLocaleString('fa-IR')} · ${esc((h.labels||[]).join('، '))}</span></div>`).join('');
+    }
+  }catch(e){console.error(e)}
+}
+async function saveAutoFailover(){
+  const default_sni=document.getElementById('af-sni').value.trim();
+  try{
+    const r=await authF('/api/auto-failover/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_sni})});
+    if(!r.ok)throw new Error();
+    toast('تنظیمات Auto-Failover ذخیره شد ✓','ok');
+    loadAutoFailover();fetchDefaultVless();
+  }catch(e){toast('خطا در ذخیره تنظیمات','err')}
+}
+async function toggleAutoFailover(){
+  try{
+    const r=await authF('/api/auto-failover/status');
+    const d=await r.json();
+    const res=await authF('/api/auto-failover/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!d.enabled})});
+    if(!res.ok)throw new Error();
+    toast(d.enabled?'دیمون Auto-Failover غیرفعال شد':'دیمون Auto-Failover فعال شد','ok');
+    loadAutoFailover();
+  }catch(e){toast('خطا','err')}
+}
+async function triggerAutoFailover(){
+  try{
+    const r=await authF('/api/auto-failover/trigger',{method:'POST'});
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    toast(d.switched_count>0?`⚡ ${toFa(d.switched_count)} سوئیچ خودکار انجام شد`:'🟢 همه SNI ها سالم هستند','ok');
+    loadAutoFailover();
+  }catch(e){toast('خطا در اجرای پایش','err')}
+}
 function togglePwField(id,btn){
   const inp=document.getElementById(id);
   const icon=btn.querySelector('i');
@@ -2411,7 +2522,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   initCharts();
   document.getElementById('set-host').textContent=location.host;
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
-  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();
+  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();
   setInterval(fetchStats,4000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
@@ -2630,7 +2741,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div class="top">
     <div class="brand">
       <div class="brand-img"><img src="data:image/png;base64,{LOGO_B64}" alt="XR"></div>
-      <div><div class="brand-name">XR</div><div class="brand-sub">v9.8</div></div>
+      <div><div class="brand-name">XR</div><div class="brand-sub">v9.9</div></div>
     </div>
     <div class="top-actions">
       <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="تغییر تم"><i class="ti ti-sun" id="theme-icon"></i></button>
@@ -2640,7 +2751,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
   <div id="root">
     <div class="empty-state"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>در حال بارگذاری...</div>
   </div>
-  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.8</div>
+  <div class="footer">پشتیبانی: <a href="https://t.me/Farajian2004f" target="_blank">@Farajian2004f</a> · XR v9.9</div>
 </div>
 <script>
 const UUID_KEY='{uuid_key}';
