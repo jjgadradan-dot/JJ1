@@ -914,7 +914,10 @@ async def _handle_callback(cb: dict):
         host = get_host()
         vless = vless_link_for_link(l, uid, host)
         sub_url = f"https://{host}/sub/{uid}"
-        msg = f"🔗 لینک اتصال «{l.get('label')}»:\n\n<code>{vless}</code>\n\nلینک ساب ساده (فقط متن کانفیگ):\n<code>{sub_url}</code>"
+        msg = (
+            f"🔗 لینک اتصال «{l.get('label')}»:\n\n<code>{vless}</code>\n\n"
+            f"لینک ساب مشتری (۳ پروتکل + حجم و زمان):\n<code>{sub_url}</code>"
+        )
         sid = l.get("sub_id")
         if sid and sid in SUBS:
             msg += f"\n\n✨ لینک ساب حرفه‌ای گروه «{SUBS[sid].get('name','?')}»:\n<code>{_group_public_url(SUBS[sid])}</code>"

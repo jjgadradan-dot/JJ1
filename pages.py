@@ -1276,7 +1276,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         </div>
       </div>
       <div class="cp-footer">
-        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · فقط UUID‌های ثبت‌شده اجازه اتصال دارند · پروتکل و فرگمنت از بخش «ویرایش کانفیگ» هم قابل تغییرند.</div>
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · لینک ساب مشتری سه پروتکل جدا (VLESS-WS، XHTTP، Trojan) می‌سازد · پروتکل انتخابی شما ردیف اول است.</div>
         <button class="cp-submit-btn" onclick="createLink()"><i class="ti ti-link-plus"></i> ساخت کانفیگ</button>
       </div>
     </div>
@@ -1391,7 +1391,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
   <div class="g2">
     <div class="card">
       <div class="card-title"><i class="ti ti-rss"></i> سابسکریپشن تکی (هر کانفیگ)</div>
-      <p style="font-size:11.5px;color:var(--t3);line-height:1.8;margin-bottom:12px">هر کانفیگ URL سابسکریپشن مخصوص دارد. از کارت کانفیگ روی آیکون <i class="ti ti-rss"></i> کلیک کنید.</p>
+      <p style="font-size:11.5px;color:var(--t3);line-height:1.8;margin-bottom:12px">هر کانفیگ URL سابسکریپشن مخصوص دارد. از کارت کانفیگ روی آیکون <i class="ti ti-rss"></i> کلیک کنید. در ساب مشتری سه پروتکل جدا (VLESS-WS، XHTTP، Trojan) می‌آید، بعد حجم و زمان، بعد لوکیشن. نوار حجم هم در v2rayNG، Hiddify، Streisand و Clash نمایش داده می‌شود.</p>
     </div>
     <div class="card">
       <div class="card-title"><i class="ti ti-database"></i> سابسکریپشن کامل (ادمین)</div>
@@ -1960,6 +1960,17 @@ function navTo(name){
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.17',date:'۱۴۰۵/۰۵',title:'سه پروتکل روی یک ساب مشتری',items:[
+    {t:'new',x:'هر لینک ساب مشتری سه کانفیگ جدا می‌سازد: VLESS-WS، XHTTP و Trojan — همه روی همان UUID و همان حجم/زمان'},
+    {t:'new',x:'اگر یکی از پروتکل‌ها فیلتر شود، مشتری از لیست ساب پروتکل دیگر را وصل می‌کند'},
+    {t:'imp',x:'ترتیب لیست: سه پروتکل مشتری، بعد ردیف حجم و زمان، بعد ردیف لوکیشن'},
+  ]},
+  {v:'v9.16',date:'۱۴۰۵/۰۵',title:'نمایش حجم و زمان اشتراک داخل v2rayNG و لینک ساب',items:[
+    {t:'new',x:'هدر استاندارد subscription-userinfo روی همه لینک‌های ساب — نوار حجم و تاریخ انقضا در v2rayNG، Hiddify، Clash و Streisand'},
+    {t:'new',x:'در لیست ساب سه ردیف جدا: کانفیگ مشتری، بعد حجم و زمان، بعد لوکیشن'},
+    {t:'imp',x:'حجم و زمان داخل اسم کانفیگ مشتری نمی‌آید تا با سرور واقعی قاطی نشود'},
+    {t:'imp',x:'عنوان ساب فارسی به‌صورت base64 در هدر profile-title ارسال می‌شود تا در کلاینت درست دیده شود'},
+  ]},
   {v:'v9.15',date:'۱۴۰۵/۰۵',title:'فرم کانفیگ کامل و موتور رلهٔ فوق‌سریع',items:[
     {t:'new',x:'کارت Trojan در فرم ساخت کانفیگ + انتخابگر پروتکل در مودال ویرایش'},
     {t:'new',x:'کارت‌های پکت فرگمنت (همراه اول، ایرانسل، داخلی، دستی) در فرم ساخت و ویرایش کانفیگ'},
