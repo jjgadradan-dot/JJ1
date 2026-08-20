@@ -465,6 +465,13 @@ a{color:inherit;text-decoration:none}
 .af-h-item b.ok{color:#22c55e}
 .af-h-time{font-size:9px;color:var(--t3)}
 
+/* ══════ 🛒 فروشگاه (فروش خودکار اشتراک) ══════ */
+.shop-cfg-panel{border-color:rgba(31,184,126,.28)}
+.shop-cfg-panel::before{background:radial-gradient(circle,rgba(31,184,126,.12),transparent 70%)}
+.shop-cfg-panel .pw-hero-icon{background:linear-gradient(135deg,#1FB87E,#3B7CF6)}
+#pg-shop .sr{flex-wrap:wrap}
+#shop-orders-list .sr{padding:10px 14px}
+
 /* ══════ ⚛️ موتور مسیریابی چندگانه کوانتومی (Quantum MultiPath Engine از Nyx v2.3.0) ══════ */
 .mp-panel{border-color:rgba(251,191,36,.28)}
 .mp-panel::before{background:radial-gradient(circle,rgba(251,191,36,.13),transparent 70%)}
@@ -902,6 +909,44 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     </div>
   </div>
 </div>
+<div class="modal-bg" id="modal-shop-plan">
+  <div class="modal-v2" style="max-width:560px">
+    <div class="modal-v2-head">
+      <button class="modal-v2-close" onclick="closeModal('modal-shop-plan')"><i class="ti ti-x"></i></button>
+      <div class="modal-v2-icon" style="background:linear-gradient(135deg,var(--green),var(--accent))"><i class="ti ti-package"></i></div>
+      <div class="modal-v2-title" id="shop-plan-modal-title">پلن فروش جدید</div>
+      <div class="modal-v2-sub">بعد از خرید، کانفیگ با همین مشخصات صادر می‌شود</div>
+    </div>
+    <div class="modal-v2-body" style="padding:18px 22px">
+      <input type="hidden" id="shp-id">
+      <div class="fg" style="margin-bottom:12px"><label>نام پلن</label><input class="pw-input" id="shp-name" placeholder="مثلاً: پلن طلایی ۳۰ گیگ"></div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="fg" style="flex:1"><label>قیمت (تومان)</label><input class="pw-input" id="shp-price" type="number" min="1000" dir="ltr" placeholder="50000"></div>
+        <div class="fg" style="flex:1"><label>حجم (GB — ۰ = نامحدود)</label><input class="pw-input" id="shp-volume" type="number" min="0" dir="ltr" placeholder="30"></div>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="fg" style="flex:1"><label>مدت (روز — ۰ = نامحدود)</label><input class="pw-input" id="shp-days" type="number" min="0" dir="ltr" placeholder="30"></div>
+        <div class="fg" style="flex:1"><label>سرعت (Mbps — ۰ = نامحدود)</label><input class="pw-input" id="shp-speed" type="number" min="0" dir="ltr" placeholder="۰ = نامحدود"></div>
+      </div>
+      <div class="form-row" style="margin-bottom:6px">
+        <div class="fg" style="flex:1"><label>آی‌پی هم‌زمان (۰ = نامحدود)</label><input class="pw-input" id="shp-ip" type="number" min="0" dir="ltr" placeholder="۰ = نامحدود"></div>
+        <div class="fg" style="flex:1"><label>پروتکل</label>
+          <select class="fs" id="shp-proto" style="width:100%">
+            <option value="">پیش‌فرض پنل</option>
+            <option value="vless-ws">VLESS + WebSocket</option>
+            <option value="xhttp-packet-up">XHTTP (packet-up)</option>
+            <option value="xhttp-stream-up">XHTTP (stream-up)</option>
+            <option value="xhttp-stream-one">XHTTP (stream-one)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-v2-footer">
+      <button class="btn btn-o" onclick="closeModal('modal-shop-plan')" style="flex:.6">انصراف</button>
+      <button class="btn btn-p" id="shp-save-btn" onclick="saveShopPlan()"><i class="ti ti-package"></i> ذخیره پلن</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="modal-edit-link">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('modal-edit-link')"><i class="ti ti-x"></i></button>
@@ -1022,6 +1067,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     <div class="nav-it" data-pg="subgroups"><i class="ti ti-folders"></i> گروه‌های ساب <span class="nav-badge" id="subs-nb">0</span></div>
     <div class="nav-it" data-pg="nodes"><i class="ti ti-server-2"></i> نودها <span class="nav-badge" id="nodes-nb">0</span></div>
     <div class="nav-it" data-pg="master"><i class="ti ti-api"></i> API نود <span class="nav-badge" id="master-nb">API</span></div>
+    <div class="nav-it" data-pg="shop"><i class="ti ti-shopping-bag"></i> فروشگاه <span class="nav-badge" id="shop-nb">۰</span></div>
     <div class="nav-it" data-pg="subscriptions"><i class="ti ti-rss"></i> سابسکریپشن</div>
     <div class="nav-it" data-pg="traffic"><i class="ti ti-chart-area"></i> ترافیک</div>
     <div class="nav-it" data-pg="monitor"><i class="ti ti-radar-2"></i> پایش شبکه 📡</div>
@@ -1384,6 +1430,68 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         </div>
       </div>
     </div>
+  </div>
+</section>
+<section class="pg" id="pg-shop">
+  <div class="topbar">
+    <div><div class="tb-title"><i class="ti ti-shopping-bag"></i> فروشگاه — فروش خودکار اشتراک</div><div class="tb-sub">فروش پلن از طریق ربات تلگرام + درگاه پرداخت، با صدور خودکار کانفیگ بعد از خرید</div></div>
+    <div class="tb-right"><span class="badge" id="shop-status-badge">—</span><button class="btn btn-p" onclick="openShopPlanModal()"><i class="ti ti-plus"></i> پلن جدید</button></div>
+  </div>
+  <div class="cl" style="margin-top:0;margin-bottom:16px"><i class="ti ti-info-circle"></i><span>خریدار در ربات تلگرام پلن را انتخاب و در درگاه پرداخت می‌کند؛ بلافاصله بعد از تأیید پرداخت، کانفیگ با حجم/مدت/سرعت همان پلن ساخته و برایش ارسال می‌شود. مدیریت فروشگاه هم همین‌جا و هم از ربات ممکن است.</span></div>
+  <div class="af-grid" style="margin-bottom:16px">
+    <div class="af-tile"><div class="af-tile-label">درآمد کل</div><div class="af-tile-val fa" id="shop-rev-total">۰ تومان</div></div>
+    <div class="af-tile"><div class="af-tile-label">درآمد امروز</div><div class="af-tile-val fa" id="shop-rev-today">۰ تومان</div></div>
+    <div class="af-tile"><div class="af-tile-label">فروش موفق</div><div class="af-tile-val fa" id="shop-sales-total">۰</div></div>
+    <div class="af-tile"><div class="af-tile-label">در انتظار پرداخت</div><div class="af-tile-val fa" id="shop-pending">۰</div></div>
+  </div>
+  <div class="g2">
+    <div class="pw-panel shop-cfg-panel">
+      <div class="pw-hero">
+        <div class="pw-hero-icon"><i class="ti ti-credit-card"></i></div>
+        <div class="pw-hero-text">
+          <div class="pw-hero-title">درگاه پرداخت <span class="af-badge" id="shop-gw-badge">—</span></div>
+          <div class="pw-hero-sub">زرین‌پال، آیدی‌پی یا درگاه آزمایشی (تست چرخه بدون پول واقعی)</div>
+        </div>
+      </div>
+      <div class="pw-body">
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="fg" style="flex:1"><label>درگاه فعال</label>
+            <select class="fs" id="shop-gw" style="width:100%">
+              <option value="zarinpal">زرین‌پال</option>
+              <option value="idpay">آیدی‌پی</option>
+              <option value="test">آزمایشی (تست)</option>
+            </select>
+          </div>
+          <div class="fg" style="flex:1"><label>وضعیت فروشگاه</label>
+            <select class="fs" id="shop-enabled" style="width:100%">
+              <option value="1">✅ روشن</option>
+              <option value="0">⛔ خاموش</option>
+            </select>
+          </div>
+        </div>
+        <div class="pw-field" style="margin-bottom:10px"><label>مرچنت‌کد زرین‌پال / API-Key آیدی‌پی</label>
+          <input class="pw-input" id="shop-merchant" dir="ltr" placeholder="مثلاً: 64-hex زرین‌پال" style="padding-left:14px">
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="fg" style="flex:1"><label>دامنه بازگشت پرداخت (خالی = خود پنل)</label>
+            <input class="pw-input" id="shop-public-base" dir="ltr" placeholder="https://shop.mydomain.com" style="padding-left:14px">
+          </div>
+          <div class="fg" style="flex:0 0 110px"><label>سندباکس</label>
+            <select class="fs" id="shop-sandbox" style="width:100%"><option value="0">خاموش</option><option value="1">روشن</option></select>
+          </div>
+        </div>
+        <div class="sr" style="margin-bottom:12px"><span class="sr-k"><i class="ti ti-callback"></i> Callback</span><span class="sr-v" dir="ltr" id="shop-callback-url">—</span></div>
+        <button class="pw-submit" onclick="saveShopCfg()"><i class="ti ti-device-floppy"></i> ذخیره تنظیمات فروشگاه</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-package"></i> پلن‌های فروش</div>
+      <div id="shop-plans-grid" style="display:flex;flex-direction:column;gap:8px">در حال بارگذاری...</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div class="card-title"><i class="ti ti-receipt-2"></i> آخرین سفارش‌ها</div>
+    <div id="shop-orders-list">در حال بارگذاری...</div>
   </div>
 </section>
 <section class="pg" id="pg-subscriptions">
@@ -1953,13 +2061,21 @@ overlay.addEventListener('click',closeSb);
 function navTo(name){
   document.querySelectorAll('.nav-it').forEach(n=>n.classList.toggle('on',n.dataset.pg===name));
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==='pg-'+name));
-  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:renderChangelog,monitor:loadMultiPath};
+  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:renderChangelog,monitor:loadMultiPath,shop:loadShop};
   if(loaders[name])loaders[name]();
   closeSb();window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.18',date:'۱۴۰۵/۰۵',title:'🛒 فروش خودکار اشتراک',items:[
+    {t:'new',x:'فروشگاه داخل ربات تلگرام: خریدار پلن را انتخاب می‌کند، در درگاه پرداخت (زرین‌پال / آیدی‌پی) پرداخت می‌کند و بلافاصله بعد از تأیید، کانفیگ با مشخصات همان پلن خودکار صادر و برایش ارسال می‌شود'},
+    {t:'new',x:'پلن‌بندی کامل: قیمت (تومان)، حجم، مدت، محدودیت سرعت و آی‌پی و پروتکل — قابل مدیریت از پنل و ربات'},
+    {t:'new',x:'درگاه آزمایشی (test) برای تست کل چرخه فروش بدون پول واقعی + حالت سندباکس زرین‌پال و آیدی‌پی'},
+    {t:'new',x:'تب «فروشگاه» در پنل: آمار درآمد و فروش، مدیریت پلن‌ها و لیست سفارش‌ها با وضعیت پرداخت'},
+    {t:'new',x:'صفحه بازگشت پرداخت: بعد از موفقیت، مرورگر خریدار به صفحه مشتری همان کانفیگ (/subinfo) هدایت می‌شود'},
+    {t:'new',x:'متغیرهای محیطی: SHOP_ENABLED، SHOP_GATEWAY، SHOP_MERCHANT_ID، SHOP_SANDBOX و SHOP_PUBLIC_BASE'},
+  ]},
   {v:'v9.17',date:'۱۴۰۵/۰۵',title:'سه پروتکل روی یک ساب مشتری',items:[
     {t:'new',x:'هر لینک ساب مشتری سه کانفیگ جدا می‌سازد: VLESS-WS، XHTTP و Trojan — همه روی همان UUID و همان حجم/زمان'},
     {t:'new',x:'اگر یکی از پروتکل‌ها فیلتر شود، مشتری از لیست ساب پروتکل دیگر را وصل می‌کند'},
@@ -2531,6 +2647,126 @@ async function createRemoteConfig(id,type){
 }
 async function deleteRemoteConfig(id,cid){if(!confirm('کانفیگ از پنل راه‌دور حذف شود؟'))return;try{const r=await authF('/api/nodes/'+id+'/configs/'+cid,{method:'DELETE'}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'خطا');toast('از نود حذف شد','ok');showNodeConfigs(id);}catch(e){toast(e.message,'err')}}
 async function deleteNode(id){if(!confirm('اتصال این نود حذف شود؟ اطلاعات خود پنل حذف نمی‌شود.'))return;try{const r=await authF('/api/nodes/'+id,{method:'DELETE'});if(!r.ok)throw new Error();toast('نود حذف شد','ok');loadNodes()}catch(e){toast('خطا','err')}}
+
+/* ===== 🛒 فروشگاه (فروش خودکار اشتراک) ===== */
+let shopCache={plans:[],orders:[],stats:{}};
+function shopToman(n){return toFa(Number(n||0).toLocaleString('en-US'))+' تومان'}
+function shopStatusChip(st){const m={paid:['✅ پرداخت شد','bg-green'],pending:['⏳ در انتظار','bg-amber'],failed:['❌ ناموفق','bg-red'],expired:['🕓 منقضی','bg-red'],canceled:['🚫 لغو','bg-red']};const x=m[st]||[st,'bg-blue'];return '<span class="badge '+x[1]+'">'+x[0]+'</span>'}
+async function loadShop(){
+  try{
+    const r=await authF('/api/shop');if(!r.ok)throw new Error();
+    const d=await r.json();shopCache=d;
+    const sb=document.getElementById('shop-status-badge');
+    sb.className='badge '+(d.enabled?'bg-green':'bg-red');
+    sb.textContent=d.enabled?'✅ فروشگاه روشن':'⛔ فروشگاه خاموش';
+    document.getElementById('shop-nb').textContent=toFa((d.stats||{}).pending_orders||0);
+    document.getElementById('shop-gw').value=d.gateway||'zarinpal';
+    document.getElementById('shop-enabled').value=d.enabled?'1':'0';
+    document.getElementById('shop-merchant').value=d.merchant_id||'';
+    document.getElementById('shop-public-base').value=d.public_base||'';
+    document.getElementById('shop-sandbox').value=d.sandbox?'1':'0';
+    const gb=document.getElementById('shop-gw-badge');
+    gb.textContent=(d.gateways&&d.gateways[d.gateway])||d.gateway;
+    gb.className='af-badge '+(d.enabled?'on':'off');
+    document.getElementById('shop-callback-url').textContent=(d.callback_base||'—')+'/pay/callback/{order_id}';
+    const st=d.stats||{};
+    document.getElementById('shop-rev-total').textContent=shopToman(st.revenue_total_toman);
+    document.getElementById('shop-rev-today').textContent=shopToman(st.revenue_today_toman);
+    document.getElementById('shop-sales-total').textContent=toFa(st.total_sales||0);
+    document.getElementById('shop-pending').textContent=toFa(st.pending_orders||0);
+    renderShopPlans(d.plans||[]);
+    renderShopOrders(d.orders||[]);
+  }catch(e){console.error('loadShop',e)}
+}
+function renderShopPlans(plans){
+  const grid=document.getElementById('shop-plans-grid');
+  if(!plans.length){grid.innerHTML='<div class="subs-empty-v2"><div class="subs-empty-v2-icon"><i class="ti ti-package-off"></i></div><div class="subs-empty-v2-title">هنوز پلنی تعریف نشده</div><div class="subs-empty-v2-sub">اولین پلن فروش را بسازید تا ربات بتواند بفروشد</div></div>';return}
+  grid.innerHTML=plans.map(p=>{
+    const vol=p.limit_gb>0?toFa(p.limit_gb)+' GB':'♾ نامحدود';
+    const days=p.days>0?toFa(p.days)+' روز':'♾ نامحدود';
+    const speed=p.speed_mbps>0?toFa(p.speed_mbps)+' Mbps':'♾';
+    const ip=p.ip_limit>0?toFa(p.ip_limit):'♾';
+    return `<div class="sr" style="align-items:center;gap:10px">
+      <span class="sr-k" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="dot ${p.active!==false?'dg':'dr'}"></span> ${esc(p.name)} <small style="color:var(--t3)">(${toFa(p.sold_count||0)} فروش)</small></span>
+      <span class="badge bg-blue">${vol} · ${days}</span>
+      <span class="badge bg-purple">${speed} · IP ${ip}</span>
+      <span class="badge bg-green">${shopToman(p.price_toman)}</span>
+      <span style="display:flex;gap:5px;flex-shrink:0">
+        <button class="btn btn-sm btn-g btn-icon" onclick="createShopPaymentLink('${p.id}')" title="لینک پرداخت دستی"><i class="ti ti-credit-card"></i></button>
+        <button class="btn btn-sm btn-o btn-icon" onclick="openShopPlanModal('${p.id}')" title="ویرایش"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-sm btn-amber btn-icon" onclick="toggleShopPlan('${p.id}')" title="${p.active!==false?'غیرفعال':'فعال'}"><i class="ti ti-${p.active!==false?'player-pause':'player-play'}"></i></button>
+        <button class="btn btn-sm btn-d btn-icon" onclick="delShopPlan('${p.id}')" title="حذف"><i class="ti ti-trash"></i></button>
+      </span>
+    </div>`}).join('');
+}
+function openShopPlanModal(id){
+  const p=(shopCache.plans||[]).find(x=>x.id===id);
+  document.getElementById('shop-plan-modal-title').textContent=p?('ویرایش پلن «'+esc(p.name)+'»'):'پلن فروش جدید';
+  document.getElementById('shp-id').value=p?p.id:'';
+  document.getElementById('shp-name').value=p?p.name:'';
+  document.getElementById('shp-price').value=p?p.price_toman:'';
+  document.getElementById('shp-volume').value=p?(p.limit_gb||0):'';
+  document.getElementById('shp-days').value=p?(p.days||0):'';
+  document.getElementById('shp-speed').value=p?(p.speed_mbps||0):'';
+  document.getElementById('shp-ip').value=p?(p.ip_limit||0):'';
+  document.getElementById('shp-proto').value=p?(p.protocol||''):'';
+  openModal('modal-shop-plan');
+}
+async function saveShopPlan(){
+  const id=document.getElementById('shp-id').value;
+  const body={
+    name:document.getElementById('shp-name').value.trim(),
+    price_toman:+document.getElementById('shp-price').value||0,
+    limit_gb:+document.getElementById('shp-volume').value||0,
+    days:+document.getElementById('shp-days').value||0,
+    speed_mbps:+document.getElementById('shp-speed').value||0,
+    ip_limit:+document.getElementById('shp-ip').value||0,
+    protocol:document.getElementById('shp-proto').value,
+  };
+  if(!body.name){toast('نام پلن الزامی است','err');return}
+  if(body.price_toman<1000){toast('حداقل قیمت ۱,۰۰۰ تومان است','err');return}
+  const btn=document.getElementById('shp-save-btn');btn.disabled=true;
+  try{
+    const r=await authF(id?('/api/shop/plans/'+id):'/api/shop/plans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا در ذخیره پلن');
+    closeModal('modal-shop-plan');toast('پلن ذخیره شد ✓','ok');loadShop();
+  }catch(e){toast(e.message,'err')}
+  finally{btn.disabled=false}
+}
+async function toggleShopPlan(id){try{const r=await authF('/api/shop/plans/'+id+'/toggle',{method:'POST'});if(!r.ok)throw new Error();loadShop()}catch(e){toast('خطا','err')}}
+async function createShopPaymentLink(id){
+  try{
+    const r=await authF('/api/shop/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan_id:id})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا در ساخت لینک پرداخت');
+    toast('لینک پرداخت ساخته شد ✓','ok');loadShop();
+    prompt('لینک پرداخت این سفارش (برای مشتری بفرستید؛ بعد از پرداخت، کانفیگ خودکار صادر می‌شود):',d.pay_url);
+  }catch(e){toast(e.message,'err')}
+}
+async function delShopPlan(id){if(!confirm('این پلن حذف شود؟ سفارش‌های قبلی دست‌نخورده می‌مانند.'))return;try{const r=await authF('/api/shop/plans/'+id,{method:'DELETE'});if(!r.ok)throw new Error();toast('پلن حذف شد','ok');loadShop()}catch(e){toast('خطا','err')}}
+async function saveShopCfg(){
+  try{
+    const body={enabled:document.getElementById('shop-enabled').value==='1',gateway:document.getElementById('shop-gw').value,merchant_id:document.getElementById('shop-merchant').value.trim(),sandbox:document.getElementById('shop-sandbox').value==='1',public_base:document.getElementById('shop-public-base').value.trim()};
+    const r=await authF('/api/shop/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error();
+    toast('تنظیمات فروشگاه ذخیره شد ✓','ok');loadShop();
+  }catch(e){toast('خطا در ذخیره تنظیمات','err')}
+}
+function renderShopOrders(orders){
+  const box=document.getElementById('shop-orders-list');
+  if(!orders.length){box.innerHTML='<div class="empty" style="padding:15px">هنوز سفارشی ثبت نشده</div>';return}
+  box.innerHTML=orders.map(o=>{
+    const buyer=o.username?('@'+o.username):(o.fullname||o.chat_id);
+    const dt=(o.created_at||'').replace('T',' ').slice(0,16);
+    return `<div class="sr" style="align-items:center;gap:10px">
+      <span class="sr-k" style="flex:1;min-width:0"><span dir="ltr">${esc(o.id)}</span> · ${esc(o.plan_name)} <small style="color:var(--t3)">· ${esc(String(buyer))}</small></span>
+      <span class="badge bg-green">${shopToman(o.amount_toman)}</span>
+      ${shopStatusChip(o.status)}
+      ${o.link_uid?`<a class="btn btn-sm btn-g btn-icon" href="/subinfo/${esc(o.link_uid)}" target="_blank" title="کانفیگ صادرشده"><i class="ti ti-external-link"></i></a>`:''}
+      <small style="color:var(--t3);flex-shrink:0" dir="ltr">${esc(dt)}</small>
+    </div>`}).join('');
+}
 
 let revealedNodeToken='';
 function toggleMasterAuth(){
@@ -3257,7 +3493,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
   fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();loadMultiPath();loadBranding();loadBackup();loadWarp();
   setInterval(fetchStats,4000);
-  setInterval(()=>{const ps=document.getElementById('pg-settings'),pm=document.getElementById('pg-monitor');const psOn=ps&&ps.classList.contains('on'),pmOn=pm&&pm.classList.contains('on');if(pmOn)loadMultiPath();if(psOn){loadBackup();loadWarp();}},8000);
+  setInterval(()=>{const ps=document.getElementById('pg-settings'),pm=document.getElementById('pg-monitor'),pc=document.getElementById('pg-shop');const psOn=ps&&ps.classList.contains('on'),pmOn=pm&&pm.classList.contains('on'),pcOn=pc&&pc.classList.contains('on');if(pmOn)loadMultiPath();if(psOn){loadBackup();loadWarp();}if(pcOn)loadShop();},8000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
     if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();

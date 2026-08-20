@@ -37,6 +37,24 @@ from main import (
     create_sub_group,
     set_link_sub,
     remove_sub_group,
+    CONFIG,
+)
+
+from shop import (
+    SHOP as SHOP_STATE,
+    GATEWAYS as SHOP_GATEWAYS,
+    MIN_PRICE_TOMAN,
+    add_plan as shop_add_plan,
+    remove_plan as shop_remove_plan,
+    toggle_plan as shop_toggle_plan,
+    get_plan as shop_get_plan,
+    public_plans as shop_public_plans,
+    create_order as shop_create_order,
+    verify_and_finalize as shop_verify_finalize,
+    orders_for_chat as shop_orders_for_chat,
+    orders_recent as shop_orders_recent,
+    shop_stats as shop_stats,
+    delivery_message as shop_delivery_message,
 )
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -187,6 +205,14 @@ async def send_admin_document(payload: bytes, filename: str, caption: str = "") 
     return sent
 
 
+async def send_buyer_message(chat_id: int, text: str, kb: dict | None = None):
+    """ارسال پیام به خریدار (فروشگاه) — اگر ربات خاموش باشد بی‌صدا برمی‌گرداند."""
+    if _client is None or not chat_id:
+        return 0
+    res = await _send(chat_id, text, kb)
+    return 1 if (res and res.get("ok")) else 0
+
+
 async def _download_file(file_id: str) -> bytes | None:
     """دانلود فایل آپلودشده توسط ادمین (برای بازیابی بکاپ)."""
     if _client is None:
@@ -262,6 +288,7 @@ def _main_menu_kb():
         [{"text": "➕ ساخت کانفیگ جدید", "callback_data": "newcfg"}],
         [{"text": "🗂 گروه‌های ساب (لینک حرفه‌ای)", "callback_data": "subs:0"}],
         [{"text": "🛡️ سوئیچ خودکار SNI", "callback_data": "autofailover"}],
+        [{"text": "🛒 فروشگاه (فروش خودکار)", "callback_data": "shmenu"}],
         [{"text": "🔄 رفرش", "callback_data": "menu"}],
     ]}
 
@@ -514,6 +541,627 @@ def _format_cfg_group(uid: str) -> str:
         "برای گرفتن لینک ساب حرفه‌ای (صفحه‌ی زیبا)، این کانفیگ رو به یک گروه اضافه کن یا یه گروه جدید بساز:"
     )
 
+# ── 🛒 فروشگاه: جریان خریدار (غیرادمین) ───────────────────────────────────────
+# خریدار /start می‌زند → لیست پلن‌ها → پرداخت آنلاین در درگاه → بعد از تأیید،
+# کانفیگ خودکار صادر و همین‌جا تحویل داده می‌شود.
+
+SHOP_ORDER_TTL_TEXT = "۲ ساعت"
+
+def _shop_open() -> tuple[bool, str]:
+    if not SHOP_STATE.get("enabled"):
+        return False, "فروشگاه فعلاً بسته است. بعداً سر بزن! 🙏"
+    if not shop_public_plans():
+        return False, "فعلاً پلنی برای فروش تعریف نشده. بعداً سر بزن! 🙏"
+    return True, ""
+
+def _buyer_hub_text() -> str:
+    brand = (CONFIG.get("branding") or {}).get("brand_name") or "XR"
+    return (
+        f"👋 به فروشگاه <b>{brand}</b> خوش اومدی!\n\n"
+        "📡 اینترنت آزاد و پرسرعت، خرید کاملاً خودکار:\n"
+        "پلن رو انتخاب می‌کنی → آنلاین پرداخت می‌کنی → کانفیگ همین‌جا تحویل می‌گیری. 🚀\n\n"
+        "از دکمه‌های زیر استفاده کن:"
+    )
+
+def _buyer_hub_kb():
+    return {"inline_keyboard": [
+        [{"text": "🛍 خرید اشتراک", "callback_data": "bplans"}],
+        [{"text": "📦 خریدهای من", "callback_data": "bmy"}],
+        [{"text": "💬 پشتیبانی", "callback_data": "bsupport"}],
+    ]}
+
+def _plan_volume_txt(p: dict) -> str:
+    gb = float(p.get("limit_gb") or 0)
+    return "♾ نامحدود" if gb <= 0 else f"{gb:g} گیگابایت"
+
+def _plan_days_txt(p: dict) -> str:
+    d = int(p.get("days") or 0)
+    return "♾ نامحدود" if d <= 0 else f"{d} روز"
+
+def _format_plan_card(p: dict) -> str:
+    speed = float(p.get("speed_mbps") or 0)
+    ip = int(p.get("ip_limit") or 0)
+    proto = p.get("protocol") or ""
+    lines = [
+        f"📦 پلن <b>«{p.get('name')}»</b>",
+        "",
+        f"💵 مبلغ: <b>{int(p.get('price_toman') or 0):,} تومان</b>",
+        f"📊 حجم: {_plan_volume_txt(p)}",
+        f"⏳ مدت: {_plan_days_txt(p)}",
+        f"🚀 سرعت: {'♾ نامحدود' if speed <= 0 else f'{speed:g} Mbps'}",
+        f"👥 آی‌پی هم‌زمان: {'♾ نامحدود' if ip <= 0 else str(ip)}",
+    ]
+    if proto:
+        lines.append(f"🔌 پروتکل: {_protocol_label(proto)}")
+    lines += [
+        "",
+        "✨ بعد از پرداخت، کانفیگ به‌صورت خودکار ساخته و همین‌جا ارسال می‌شود",
+        "(لینک اتصال + ساب ۳ پروتکله + صفحه‌ی مشتری با حجم و انقضا).",
+    ]
+    return "\n".join(lines)
+
+def _buyer_plans_text() -> str:
+    plans = shop_public_plans()
+    rows = "\n\n".join(
+        f"▫️ <b>{p['name']}</b> — {int(p.get('price_toman') or 0):,} تومان\n"
+        f"   {_plan_volume_txt(p)} · {_plan_days_txt(p)}"
+        for p in plans
+    )
+    return "🛍 پلن‌های فروش:\n\n" + rows + "\n\nبرای جزئیات و خرید، یکی رو انتخاب کن:"
+
+def _buyer_plans_kb():
+    rows = [[{"text": f"📦 {p['name']} — {int(p.get('price_toman') or 0):,} تومان", "callback_data": f"bplan:{p['id']}"}]
+            for p in shop_public_plans()]
+    rows.append([{"text": "🏠 خانه", "callback_data": "bstart"}])
+    return {"inline_keyboard": rows}
+
+def _plan_detail_kb(pid: str):
+    return {"inline_keyboard": [
+        [{"text": "💳 خرید و پرداخت", "callback_data": f"bbuy:{pid}"}],
+        [{"text": "⬅ بازگشت به پلن‌ها", "callback_data": "bplans"}],
+    ]}
+
+def _order_pay_kb(oid: str, url: str, amount: int):
+    rows = [[{"text": f"💳 پرداخت آنلاین ({amount:,} تومان)", "url": url}]]
+    rows.append([{"text": "✅ پرداخت کردم", "callback_data": f"bpaid:{oid}"}])
+    rows.append([{"text": "⬅ بازگشت به پلن‌ها", "callback_data": "bplans"}])
+    return {"inline_keyboard": rows}
+
+_ORDER_STATUS_TXT = {
+    "pending": "⏳ در انتظار پرداخت",
+    "paid": "✅ پرداخت و تحویل شده",
+    "failed": "❌ ناموفق",
+    "expired": "🕓 منقضی‌شده",
+    "canceled": "🚫 لغو‌شده",
+}
+
+def _my_buys_kb(chat_id: int):
+    rows = []
+    for o in shop_orders_for_chat(chat_id)[:10]:
+        st = o.get("status")
+        label = f"{_ORDER_STATUS_TXT.get(st, st)} — {o.get('plan_name','?')[:24]}"
+        cb = f"bcfg:{o['id']}" if st == "paid" else f"bpaid:{o['id']}"
+        rows.append([{"text": label, "callback_data": cb}])
+    if not rows:
+        return None
+    rows.append([{"text": "🏠 خانه", "callback_data": "bstart"}])
+    return {"inline_keyboard": rows}
+
+def _buyer_support_text() -> str:
+    sup = (CONFIG.get("branding") or {}).get("support_telegram") or ""
+    txt = "💬 پشتیبانی:\n\n"
+    if sup:
+        txt += f"برای پیگیری سفارش و سؤالات، به پشتیبانی پیام بده:\n{sup}"
+    else:
+        txt += "با ادمین فروشگاه در همین ربات در تماس باش؛ به‌زودی لینک پشتیبانی اینجا قرار می‌گیرد."
+    return txt
+
+async def _send_buyer_hub(chat_id: int):
+    await _send(chat_id, _buyer_hub_text(), _buyer_hub_kb())
+
+async def _handle_buyer_message(msg: dict):
+    chat_id = msg.get("chat", {}).get("id")
+    if chat_id is None:
+        return
+    text = (msg.get("text") or "").strip()
+    if text in ("/cancel",):
+        _pending.pop(chat_id, None)
+    open_, closed_msg = _shop_open()
+    if not open_:
+        await _send(chat_id, f"🙏 {closed_msg}")
+        return
+    if text in ("/start", "/menu"):
+        await _send_buyer_hub(chat_id)
+        return
+    # بقیه‌ی تعامل‌ها با دکمه‌های شیشه‌ای است؛ هر متنی زده شد، هاب رو نشون بده
+    await _send(chat_id, "از دکمه‌های زیر استفاده کن:", _buyer_hub_kb())
+
+async def _handle_buyer_callback(cb: dict):
+    chat_id = cb.get("message", {}).get("chat", {}).get("id")
+    message_id = cb.get("message", {}).get("message_id")
+    data = cb.get("data", "")
+    cb_id = cb.get("id")
+    frm = cb.get("from") or {}
+    username = (frm.get("username") or "").strip()
+    fullname = " ".join(filter(None, [frm.get("first_name"), frm.get("last_name")])).strip()
+
+    async def _deny():
+        await _answer_cb(cb_id, "⛔ این دکمه مال شما نیست")
+
+    open_, closed_msg = _shop_open()
+    if not open_ and data not in ("bstart", "bsupport", "bmy"):
+        await _answer_cb(cb_id, closed_msg)
+        return
+
+    if data == "bstart":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _buyer_hub_text(), _buyer_hub_kb())
+        return
+
+    if data == "bsupport":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _buyer_support_text(), _buyer_hub_kb())
+        return
+
+    if data == "bplans":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _buyer_plans_text(), _buyer_plans_kb())
+        return
+
+    if data.startswith("bplan:"):
+        pid = data.split(":", 1)[1]
+        p = shop_get_plan(pid)
+        if not p or not p.get("active", True):
+            await _answer_cb(cb_id, "این پلن دیگه موجود نیست")
+            await _edit(chat_id, message_id, _buyer_plans_text(), _buyer_plans_kb())
+            return
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _format_plan_card(p), _plan_detail_kb(pid))
+        return
+
+    if data.startswith("bbuy:"):
+        pid = data.split(":", 1)[1]
+        p = shop_get_plan(pid)
+        if not p or not p.get("active", True):
+            await _answer_cb(cb_id, "این پلن دیگه موجود نیست")
+            return
+        await _answer_cb(cb_id, "🧾 در حال ساخت فاکتور...")
+        order, pay_url, err = await shop_create_order(p, chat_id, username, fullname)
+        if not pay_url:
+            await _send(chat_id, f"❌ فعلاً نمی‌شه سفارش ثبت کرد:\n{err}\n\nبه پشتیبانی اطلاع بده: {_buyer_support_text()}")
+            return
+        amount = int(order.get("amount_toman") or 0)
+        txt = (
+            f"🧾 فاکتور سفارش <code>{order['id']}</code>\n\n"
+            f"📦 پلن: <b>{order['plan_name']}</b>\n"
+            f"💵 مبلغ: <b>{amount:,} تومان</b>\n\n"
+            "۱) روی «💳 پرداخت آنلاین» بزن و در درگاه پرداخت کن.\n"
+            "۲) بعد از پرداخت، دکمه‌ی «✅ پرداخت کردم» همین پیام رو بزن.\n"
+            "۳) کانفیگت خودکار ساخته و همین‌جا ارسال می‌شود. 🚀"
+        )
+        await _send(chat_id, txt, _order_pay_kb(order["id"], pay_url, amount))
+        return
+
+    if data.startswith("bpaid:"):
+        oid = data.split(":", 1)[1]
+        o = SHOP_STATE["orders"].get(oid)
+        if not o or o.get("chat_id") != chat_id:
+            await _deny()
+            return
+        if o.get("status") == "paid":
+            await _answer_cb(cb_id, "✅ این سفارش قبلاً تحویل شده")
+            msg = shop_delivery_message(o)
+            if msg:
+                await _send(chat_id, msg)
+            return
+        await _answer_cb(cb_id, "⏳ در حال استعلام از درگاه...")
+        res = await shop_verify_finalize(oid)
+        st = res["status"]
+        if st == "paid":
+            await _send(chat_id, "✅ پرداخت تأیید شد! کانفیگت در پیام جداگانه ارسال شد 🎉\n(همیشه از «📦 خریدهای من» قابل دسترسیه)")
+        elif st == "pending":
+            await _send(chat_id, f"⏳ {res.get('message') or 'پرداخت هنوز ثبت نشده؛ چند لحظه دیگه دوباره «✅ پرداخت کردم» رو بزن.'}\nاگر مبلغ کم شده، معمولاً تا چند دقیقه ثبت می‌شود.")
+        else:
+            await _send(chat_id, f"❌ {res.get('message') or 'پرداخت تأیید نشد'}\nاگر مبلغی کم شده باشد تا ۷۲ ساعت بازمی‌گردد. برای تلاش دوباره از «🛍 خرید اشتراک» شروع کن.")
+        return
+
+    if data == "bmy":
+        await _answer_cb(cb_id)
+        orders = shop_orders_for_chat(chat_id)
+        if not orders:
+            await _edit(chat_id, message_id, "📦 هنوز سفارشی ثبت نکردی.\nاز «🛍 خرید اشتراک» شروع کن!", _buyer_hub_kb())
+            return
+        lines = ["📦 سفارش‌های تو:\n"]
+        for o in orders[:10]:
+            lines.append(f"▫️ {_ORDER_STATUS_TXT.get(o.get('status'), o.get('status'))} — {o.get('plan_name','?')} ({int(o.get('amount_toman') or 0):,} تومان)")
+        kb = _my_buys_kb(chat_id)
+        await _edit(chat_id, message_id, "\n".join(lines), kb or _buyer_hub_kb())
+        return
+
+    if data.startswith("bcfg:"):
+        oid = data.split(":", 1)[1]
+        o = SHOP_STATE["orders"].get(oid)
+        if not o or o.get("chat_id") != chat_id:
+            await _deny()
+            return
+        if o.get("status") != "paid" or not o.get("link_uid"):
+            await _answer_cb(cb_id, "این سفارش هنوز پرداخت نشده")
+            return
+        await _answer_cb(cb_id)
+        msg = shop_delivery_message(o)
+        await _send(chat_id, msg or "کانفیگ این سفارش دیگر روی سرور وجود ندارد؛ با پشتیبانی در تماس باش.")
+        return
+
+    await _answer_cb(cb_id, "دکمه ناشناخته است")
+
+# ── 🛒 فروشگاه: مدیریت توسط ادمین ────────────────────────────────────────────
+
+SHOP_PLAN_WIZARD_STEPS = ["name", "price", "volume", "days", "speed", "iplimit", "confirm"]
+
+_FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+def _to_en_digits(text: str) -> str:
+    return (text or "").translate(_FA_DIGITS)
+
+_PRICE_RE = re.compile(r"^([\d.,]+)\s*(k|هزار|ت)?$|(^([\d.,]+)\s*(میلیون|م))$", re.IGNORECASE)
+
+def _parse_price_text(text: str):
+    """قیمت به تومان — '50000'، '50k'، '۵۰هزار' یا '۲ میلیون'."""
+    t = _to_en_digits(text.strip()).lower().replace(",", "").replace("،", "")
+    if not t:
+        return None
+    m = re.match(r"^([\d.]+)\s*(k|هزار|ت)?$", t)
+    if m:
+        try:
+            v = float(m.group(1))
+        except ValueError:
+            return None
+        if m.group(2):
+            v *= 1_000
+        return int(v)
+    m = re.match(r"^([\d.]+)\s*(میلیون|م)$", t)
+    if m:
+        try:
+            return int(float(m.group(1)) * 1_000_000)
+        except ValueError:
+            return None
+    return None
+
+def _parse_gb_text(text: str):
+    """حجم پلن به گیگابایت — '30' یا '30GB'؛ 0 یعنی نامحدود."""
+    t = _to_en_digits(text.strip())
+    if t in ("0", "نامحدود", "infinity", "inf"):
+        return 0
+    m = re.match(r"^([\d.]+)\s*(gb|گیگ|گ)?$", t, re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        v = float(m.group(1))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+def _parse_mbit_text(text: str):
+    t = _to_en_digits(text.strip())
+    if t in ("0", "نامحدود", "infinity", "inf"):
+        return 0
+    m = re.match(r"^([\d.]+)\s*(mbit|mbps|m)?$", t, re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        v = float(m.group(1))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+def _shop_menu_kb():
+    return {"inline_keyboard": [
+        [{"text": "📦 پلن‌ها", "callback_data": "shpl:0"}],
+        [{"text": "➕ پلن جدید", "callback_data": "shnew"}],
+        [{"text": "🧾 سفارش‌ها و آمار فروش", "callback_data": "shord"}],
+        [{"text": "⚙️ تنظیمات (درگاه پرداخت)", "callback_data": "shcfg"}],
+        [{"text": "⬅ منوی اصلی", "callback_data": "menu"}],
+    ]}
+
+def _shop_admin_text() -> str:
+    st = shop_stats()
+    gw = SHOP_GATEWAYS.get(SHOP_STATE.get("gateway"), SHOP_STATE.get("gateway"))
+    return (
+        "🛒 <b>فروشگاه — فروش خودکار اشتراک</b>\n\n"
+        f"وضعیت: {'✅ روشن' if SHOP_STATE.get('enabled') else '⛔ خاموش'}\n"
+        f"درگاه پرداخت: {gw}\n"
+        f"تعداد پلن: {st['plans_count']} · فروش موفق: {st['total_sales']} · درآمد کل: {st['revenue_total_toman']:,} تومان\n\n"
+        "خریدارها توی همین ربات پلن می‌خرن و کانفیگ خودکار تحویل می‌گیرن.\n"
+        "مدیریت کامل هم از تب «فروشگاه» توی پنل وب ممکنه."
+    )
+
+def _format_plan_admin(p: dict) -> str:
+    speed = float(p.get("speed_mbps") or 0)
+    ip = int(p.get("ip_limit") or 0)
+    proto = p.get("protocol") or ""
+    return (
+        f"📦 پلن «<b>{p.get('name')}</b>» {'🟢 فعال' if p.get('active', True) else '🔴 غیرفعال'}\n\n"
+        f"💵 قیمت: {int(p.get('price_toman') or 0):,} تومان\n"
+        f"📊 حجم: {_plan_volume_txt(p)}\n"
+        f"⏳ مدت: {_plan_days_txt(p)}\n"
+        f"🚀 سرعت: {'♾ نامحدود' if speed <= 0 else f'{speed:g} Mbps'}\n"
+        f"👥 آی‌پی هم‌زمان: {'♾ نامحدود' if ip <= 0 else str(ip)}\n"
+        f"🔌 پروتکل: {_protocol_label(proto) if proto else 'پیش‌فرض پنل'}\n"
+        f"🧾 فروش‌کرده: {int(p.get('sold_count') or 0)}"
+    )
+
+def _shop_plans_kb(page: int):
+    plans = sorted(SHOP_STATE["plans"].values(), key=lambda p: p.get("price_toman", 0))
+    total = len(plans)
+    chunk = plans[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+    rows = [[{"text": f"{'🟢' if p.get('active', True) else '🔴'} {p['name'][:28]} — {int(p.get('price_toman') or 0):,} ت", "callback_data": f"shview:{p['id']}"}]
+            for p in chunk]
+    nav = []
+    if page > 0:
+        nav.append({"text": "◀ قبلی", "callback_data": f"shpl:{page-1}"})
+    if (page + 1) * PAGE_SIZE < total:
+        nav.append({"text": "بعدی ▶", "callback_data": f"shpl:{page+1}"})
+    if nav:
+        rows.append(nav)
+    rows.append([{"text": "⬅ فروشگاه", "callback_data": "shmenu"}])
+    return {"inline_keyboard": rows}
+
+def _shop_plan_kb(pid: str, active: bool):
+    return {"inline_keyboard": [
+        [{"text": ("⛔ غیرفعال‌سازی" if active else "✅ فعال‌سازی"), "callback_data": f"shtgl:{pid}"}],
+        [{"text": "🗑 حذف پلن", "callback_data": f"shdel:{pid}"}],
+        [{"text": "⬅ بازگشت به پلن‌ها", "callback_data": "shpl:0"}],
+    ]}
+
+def _shop_confirm_del_kb(pid: str):
+    return {"inline_keyboard": [
+        [{"text": "✅ بله، حذف کن", "callback_data": f"shdelok:{pid}"},
+         {"text": "❌ انصراف", "callback_data": f"shview:{pid}"}],
+    ]}
+
+def _shop_cfg_text() -> str:
+    gw = SHOP_STATE.get("gateway", "zarinpal")
+    merch = SHOP_STATE.get("merchant_id") or ""
+    merch_txt = f"<code>{merch[:6]}…{merch[-4:]}</code>" if len(merch) > 12 else (f"<code>{merch}</code>" if merch else "تنظیم نشده ⚠️")
+    cb = f"https://{get_host()}/pay/callback/{{order_id}}"
+    ready = bool(merch) or gw == "test"
+    return (
+        "⚙️ <b>تنظیمات فروشگاه</b>\n\n"
+        f"وضعیت فروشگاه: {'✅ روشن' if SHOP_STATE.get('enabled') else '⛔ خاموش'}\n"
+        f"درگاه فعال: <b>{SHOP_GATEWAYS.get(gw, gw)}</b>\n"
+        f"🧪 سندباکس (تست بدون پول): {'روشن' if SHOP_STATE.get('sandbox') else 'خاموش'}\n"
+        f"🔑 مرچنت‌کد / API-Key: {merch_txt}\n\n"
+        f"🔗 آدرس بازگشت از درگاه (Callback):\n<code>{cb}</code>\n\n"
+        + ("" if ready else "⚠️ برای درگاه واقعی، اول مرچنت‌کد را تنظیم کن.\n\n")
+        + "با دکمه‌های زیر تغییر بده:"
+    )
+
+def _shop_cfg_kb():
+    gw = SHOP_STATE.get("gateway", "zarinpal")
+    def gw_btn(key: str):
+        return {"text": ("✅ " if gw == key else "") + SHOP_GATEWAYS[key], "callback_data": f"shgw:{key}"}
+    return {"inline_keyboard": [
+        [{"text": ("⛔ خاموش کردن فروشگاه" if SHOP_STATE.get("enabled") else "✅ روشن کردن فروشگاه"), "callback_data": "shonoff"}],
+        [gw_btn("zarinpal"), gw_btn("idpay")],
+        [gw_btn("test")],
+        [{"text": f"🧪 سندباکس: {'روشن ✅' if SHOP_STATE.get('sandbox') else 'خاموش'}", "callback_data": "shsbx"}],
+        [{"text": "🔑 تنظیم مرچنت‌کد / API-Key", "callback_data": "shmerch"}],
+        [{"text": "⬅ فروشگاه", "callback_data": "shmenu"}],
+    ]}
+
+def _shop_orders_text() -> str:
+    st = shop_stats()
+    orders = shop_orders_recent(10)
+    lines = [
+        "📊 <b>آمار فروش</b>\n",
+        f"💰 درآمد کل: <b>{st['revenue_total_toman']:,} تومان</b> ({st['total_sales']} فروش)",
+        f"📅 امروز: {st['revenue_today_toman']:,} تومان ({st['sales_today']} فروش)",
+        f"⏳ در انتظار پرداخت: {st['pending_orders']}",
+        "",
+        "🧾 <b>آخرین سفارش‌ها</b>\n",
+    ]
+    if not orders:
+        lines.append("هنوز سفارشی ثبت نشده.")
+    for o in orders:
+        buyer = f"@{o['username']}" if o.get("username") else (o.get("fullname") or o.get("chat_id"))
+        lines.append(f"▫️ <code>{o['id']}</code> — {o.get('plan_name','?')} — {int(o.get('amount_toman') or 0):,} ت — {_ORDER_STATUS_TXT.get(o.get('status'), o.get('status'))} — {buyer}")
+    return "\n".join(lines)
+
+def _shop_wizard_prompt(step: str, data: dict) -> str:
+    n = SHOP_PLAN_WIZARD_STEPS.index(step) + 1
+    total = len(SHOP_PLAN_WIZARD_STEPS)
+    if step == "name":
+        return f"➕ پلن جدید ({n}/{total})\n\nنام پلن رو بفرست:\nمثلاً: <code>پلن طلایی ۳۰ گیگ</code>"
+    if step == "price":
+        return f"➕ پلن «{data.get('name')}» ({n}/{total})\n\nقیمت به تومان رو بفرست (حداقل {MIN_PRICE_TOMAN:,}):\nمثلاً: <code>50000</code> یا <code>50k</code> یا <code>۵۰هزار</code>"
+    if step == "volume":
+        return f"➕ پلن «{data.get('name')}» ({n}/{total})\n\nحجم پلن به گیگابایت (۰ = نامحدود):\nمثلاً: <code>30</code> یا <code>30GB</code>"
+    if step == "days":
+        return f"➕ پلن «{data.get('name')}» ({n}/{total})\n\nمدت اعتبار به روز (۰ = نامحدود):\nمثلاً: <code>30</code>"
+    if step == "speed":
+        return f"➕ پلن «{data.get('name')}» ({n}/{total})\n\nمحدودیت سرعت به Mbps (۰ = نامحدود):\nمثلاً: <code>20</code>"
+    if step == "iplimit":
+        return f"➕ پلن «{data.get('name')}» ({n}/{total})\n\nحداکثر آی‌پی/دستگاه هم‌زمان (۰ = نامحدود):\nمثلاً: <code>3</code>"
+    return ""
+
+def _shop_wizard_summary(data: dict) -> str:
+    speed = float(data.get("speed_mbps") or 0)
+    ip = int(data.get("ip_limit") or 0)
+    volume_txt = "♾ نامحدود" if not data.get("limit_gb") else f"{float(data.get('limit_gb')):g} گیگابایت"
+    days_txt = "♾ نامحدود" if not data.get("days") else f"{int(data.get('days'))} روز"
+    return (
+        "✅ خلاصه‌ی پلن جدید:\n\n"
+        f"📦 نام: <b>{data.get('name')}</b>\n"
+        f"💵 قیمت: {int(data.get('price_toman') or 0):,} تومان\n"
+        f"📊 حجم: {volume_txt}\n"
+        f"⏳ مدت: {days_txt}\n"
+        f"🚀 سرعت: {'♾ نامحدود' if speed <= 0 else f'{speed:g} Mbps'}\n"
+        f"👥 آی‌پی هم‌زمان: {'♾ نامحدود' if ip <= 0 else str(ip)}\n"
+        f"🔌 پروتکل: پیش‌فرض پنل\n\n"
+        "ساخته بشه؟"
+    )
+
+def _shop_wizard_unlimited_kb(step_key: str):
+    return {"inline_keyboard": [
+        [{"text": "♾ نامحدود", "callback_data": f"shskip:{step_key}"}],
+        [{"text": "❌ انصراف", "callback_data": "shcancel"}],
+    ]}
+
+def _shop_wizard_cancel_kb():
+    return {"inline_keyboard": [[{"text": "❌ انصراف", "callback_data": "shcancel"}]]}
+
+def _shop_wizard_confirm_kb():
+    return {"inline_keyboard": [
+        [{"text": "✅ ساخت پلن", "callback_data": "shconf"}],
+        [{"text": "❌ انصراف", "callback_data": "shcancel"}],
+    ]}
+
+async def _handle_shop_callback(chat_id: int, message_id: int, data: str, cb_id: str):
+    """هندلر دکمه‌های مدیریت فروشگاه (فقط ادمین — فراخوانی از _handle_callback)."""
+    if data == "shmenu":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _shop_admin_text(), _shop_menu_kb())
+        return
+
+    if data.startswith("shpl:"):
+        await _answer_cb(cb_id)
+        plans = SHOP_STATE["plans"]
+        if not plans:
+            await _edit(chat_id, message_id, "📦 هنوز پلنی تعریف نشده.\nاز «➕ پلن جدید» شروع کن!", _shop_menu_kb())
+            return
+        await _edit(chat_id, message_id, "📦 پلن‌های فروش (مرتب بر اساس قیمت):\nبرای مدیریت، یکی رو انتخاب کن:", _shop_plans_kb(int(data.split(":", 1)[1] or 0)))
+        return
+
+    if data.startswith("shview:"):
+        pid = data.split(":", 1)[1]
+        p = shop_get_plan(pid)
+        if not p:
+            await _answer_cb(cb_id, "این پلن حذف شده")
+            await _edit(chat_id, message_id, _shop_admin_text(), _shop_menu_kb())
+            return
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _format_plan_admin(p), _shop_plan_kb(pid, p.get("active", True)))
+        return
+
+    if data.startswith("shtgl:"):
+        pid = data.split(":", 1)[1]
+        p = await shop_toggle_plan(pid)
+        if not p:
+            await _answer_cb(cb_id, "این پلن حذف شده")
+            return
+        await _answer_cb(cb_id, "تغییر کرد")
+        await _edit(chat_id, message_id, _format_plan_admin(p), _shop_plan_kb(pid, p.get("active", True)))
+        return
+
+    if data.startswith("shdel:"):
+        pid = data.split(":", 1)[1]
+        p = shop_get_plan(pid)
+        if not p:
+            await _answer_cb(cb_id, "این پلن حذف شده")
+            return
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, f"❗️ از حذف پلن «{p['name']}» مطمئنی؟ (سفارش‌های قبلی دست‌نخورده می‌مونن)", _shop_confirm_del_kb(pid))
+        return
+
+    if data.startswith("shdelok:"):
+        pid = data.split(":", 1)[1]
+        name = await shop_remove_plan(pid)
+        await _answer_cb(cb_id, "حذف شد" if name else "پیدا نشد")
+        await _edit(chat_id, message_id, f"🗑 پلن «{name}» حذف شد." if name else "این پلن قبلاً حذف شده بود.", _shop_menu_kb())
+        return
+
+    if data == "shnew":
+        await _answer_cb(cb_id)
+        _pending[chat_id] = {"action": "shopplan", "step": "name", "data": {}}
+        await _send(chat_id, _shop_wizard_prompt("name", {}), _shop_wizard_cancel_kb())
+        return
+
+    if data.startswith("shskip:"):
+        step = data.split(":", 1)[1]
+        pending = _pending.get(chat_id)
+        if not pending or pending.get("action") != "shopplan":
+            await _answer_cb(cb_id, "این دکمه دیگه معتبر نیست")
+            return
+        await _answer_cb(cb_id)
+        wdata = pending["data"]
+        step_defaults = {"volume": "limit_gb", "days": "days", "speed": "speed_mbps", "iplimit": "ip_limit"}
+        wdata[step_defaults[step]] = 0
+        nxt = SHOP_PLAN_WIZARD_STEPS[SHOP_PLAN_WIZARD_STEPS.index(step) + 1]
+        pending["step"] = nxt
+        if nxt == "confirm":
+            await _edit(chat_id, message_id, _shop_wizard_summary(wdata), _shop_wizard_confirm_kb())
+        else:
+            await _edit(chat_id, message_id, _shop_wizard_prompt(nxt, wdata), _shop_wizard_unlimited_kb(nxt))
+        return
+
+    if data == "shconf":
+        pending = _pending.pop(chat_id, None)
+        if not pending or pending.get("action") != "shopplan":
+            await _answer_cb(cb_id, "این دکمه دیگه معتبر نیست")
+            return
+        await _answer_cb(cb_id)
+        wdata = pending["data"]
+        pid, plan = await shop_add_plan(
+            name=wdata.get("name") or "پلن جدید",
+            price_toman=int(wdata.get("price_toman") or 0),
+            limit_gb=float(wdata.get("limit_gb") or 0),
+            days=int(wdata.get("days") or 0),
+            speed_mbps=float(wdata.get("speed_mbps") or 0),
+            ip_limit=int(wdata.get("ip_limit") or 0),
+        )
+        await _edit(chat_id, message_id, f"✅ پلن ساخته شد!\n\n{_format_plan_admin(plan)}", _shop_plan_kb(pid, True))
+        return
+
+    if data == "shcancel":
+        _pending.pop(chat_id, None)
+        await _answer_cb(cb_id, "لغو شد")
+        await _edit(chat_id, message_id, _shop_admin_text(), _shop_menu_kb())
+        return
+
+    if data == "shord":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _shop_orders_text(), _shop_menu_kb())
+        return
+
+    if data == "shcfg":
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _shop_cfg_text(), _shop_cfg_kb())
+        return
+
+    if data == "shonoff":
+        SHOP_STATE["enabled"] = not SHOP_STATE.get("enabled", False)
+        from main import save_state
+        await save_state()
+        await _answer_cb(cb_id, "روشن شد ✅" if SHOP_STATE["enabled"] else "خاموش شد ⛔")
+        await _edit(chat_id, message_id, _shop_cfg_text(), _shop_cfg_kb())
+        return
+
+    if data.startswith("shgw:"):
+        gw = data.split(":", 1)[1]
+        if gw in SHOP_GATEWAYS:
+            SHOP_STATE["gateway"] = gw
+            from main import save_state
+            await save_state()
+        await _answer_cb(cb_id, f"درگاه: {SHOP_GATEWAYS.get(gw, gw)}")
+        await _edit(chat_id, message_id, _shop_cfg_text(), _shop_cfg_kb())
+        return
+
+    if data == "shsbx":
+        SHOP_STATE["sandbox"] = not SHOP_STATE.get("sandbox", False)
+        from main import save_state
+        await save_state()
+        await _answer_cb(cb_id)
+        await _edit(chat_id, message_id, _shop_cfg_text(), _shop_cfg_kb())
+        return
+
+    if data == "shmerch":
+        await _answer_cb(cb_id)
+        _pending[chat_id] = {"action": "shopmerchant"}
+        await _send(chat_id, "🔑 مرچنت‌کد جدید (زرین‌پال) یا API-Key (آیدی‌پی) رو بفرست:\n\nبرای زرین‌پال: کد ۳۶ کاراکتری از پنل زرین‌پال\nبرای آیدی‌پی: کلید از پنل آیدی‌پی\n\n(/cancel برای انصراف)", _shop_wizard_cancel_kb())
+        return
+
+    await _answer_cb(cb_id, "دکمه ناشناخته است")
+
 # ── Update handling ──────────────────────────────────────────────────────────
 async def _handle_message(msg: dict):
     chat_id = msg.get("chat", {}).get("id")
@@ -521,7 +1169,8 @@ async def _handle_message(msg: dict):
     if chat_id is None:
         return
     if not _is_admin(chat_id):
-        await _send(chat_id, "⛔ شما اجازه‌ی دسترسی به این ربات رو ندارید.")
+        # 🛒 غیرادمین‌ها = خریدارهای فروشگاه
+        await _handle_buyer_message(msg)
         return
 
     if text in ("/start", "/menu"):
@@ -547,6 +1196,78 @@ async def _handle_message(msg: dict):
         else:
             await _send(chat_id, f"✅ گروه ساخته شد.\n\n{_format_sub_detail(sid, s)}", _sub_detail_kb(sid))
         return
+
+    if pending and pending.get("action") == "shopmerchant" and text:
+        _pending.pop(chat_id, None)
+        merch = text.strip()[:128]
+        if len(merch) < 8:
+            await _send(chat_id, "❗️ مقدار واردشده معتبر به نظر نمی‌رسه (کوتاه‌تر از حد).\nدوباره از «⚙️ تنظیمات → 🔑 تنظیم مرچنت‌کد» تلاش کن.", _shop_menu_kb())
+            return
+        SHOP_STATE["merchant_id"] = merch
+        from main import save_state
+        await save_state()
+        await _send(chat_id, "✅ مرچنت‌کد / API-Key ذخیره شد.", _shop_cfg_kb())
+        return
+
+    if pending and pending.get("action") == "shopplan" and text:
+        step = pending["step"]
+        data = pending["data"]
+
+        if step == "name":
+            data["name"] = text[:60] or "پلن جدید"
+            pending["step"] = "price"
+            await _send(chat_id, _shop_wizard_prompt("price", data), _shop_wizard_cancel_kb())
+            return
+
+        if step == "price":
+            v = _parse_price_text(text)
+            if v is None or v < MIN_PRICE_TOMAN:
+                await _send(chat_id, f"❗️ قیمت نامعتبره. یه عدد بفرست (حداقل {MIN_PRICE_TOMAN:,}):\nمثلاً <code>50000</code> یا <code>50k</code> یا <code>۵۰هزار</code>", _shop_wizard_cancel_kb())
+                return
+            data["price_toman"] = v
+            pending["step"] = "volume"
+            await _send(chat_id, _shop_wizard_prompt("volume", data), _shop_wizard_unlimited_kb("volume"))
+            return
+
+        if step == "volume":
+            v = _parse_gb_text(text)
+            if v is None:
+                await _send(chat_id, "❗️ فرمت درست نیست. مثلاً <code>30</code> یا <code>30GB</code> (۰ = نامحدود)", _shop_wizard_unlimited_kb("volume"))
+                return
+            data["limit_gb"] = v
+            pending["step"] = "days"
+            await _send(chat_id, _shop_wizard_prompt("days", data), _shop_wizard_unlimited_kb("days"))
+            return
+
+        if step == "days":
+            n = _parse_nonneg_int(_to_en_digits(text))
+            if n is None:
+                await _send(chat_id, "❗️ یه عدد صحیح بفرست (تعداد روز، ۰ = نامحدود):", _shop_wizard_unlimited_kb("days"))
+                return
+            data["days"] = n
+            pending["step"] = "speed"
+            await _send(chat_id, _shop_wizard_prompt("speed", data), _shop_wizard_unlimited_kb("speed"))
+            return
+
+        if step == "speed":
+            v = _parse_mbit_text(text)
+            if v is None:
+                await _send(chat_id, "❗️ فرمت درست نیست. مثلاً <code>20</code> (Mbps، ۰ = نامحدود)", _shop_wizard_unlimited_kb("speed"))
+                return
+            data["speed_mbps"] = v
+            pending["step"] = "iplimit"
+            await _send(chat_id, _shop_wizard_prompt("iplimit", data), _shop_wizard_unlimited_kb("iplimit"))
+            return
+
+        if step == "iplimit":
+            n = _parse_nonneg_int(_to_en_digits(text))
+            if n is None:
+                await _send(chat_id, "❗️ یه عدد صحیح بفرست (۰ = نامحدود):", _shop_wizard_unlimited_kb("iplimit"))
+                return
+            data["ip_limit"] = n
+            pending["step"] = "confirm"
+            await _send(chat_id, _shop_wizard_summary(data), _shop_wizard_confirm_kb())
+            return
 
     if pending and pending.get("action") == "wizard" and text:
         step = pending["step"]
@@ -632,9 +1353,18 @@ async def _handle_callback(cb: dict):
     data = cb.get("data", "")
     cb_id = cb.get("id")
 
-    if chat_id is None or not _is_admin(chat_id):
-        await _answer_cb(cb_id, "⛔ دسترسی نداری")
+    if chat_id is None:
         return
+    if not _is_admin(chat_id):
+        # 🛒 دکمه‌های خرید (b*) برای همه‌ی کاربران بازه
+        await _handle_buyer_callback(cb)
+        return
+
+    # 🛒 مدیریت فروشگاه (sh*) — هندلر خودش callback رو جواب میده
+    if data == "shmenu" or data == "shnew" or data.startswith(("shpl:", "shview:", "shtgl:", "shdel:", "shdelok:", "shskip:", "shgw:", "shord", "shcfg", "shonoff", "shsbx", "shmerch", "shconf", "shcancel")):
+        await _handle_shop_callback(chat_id, message_id, data, cb_id)
+        return
+
     await _answer_cb(cb_id)
 
     if data == "menu":

@@ -155,6 +155,8 @@ async def load_state():
             for _key in ("backup", "warp"):
                 if isinstance(data.get(_key), dict):
                     CONFIG.setdefault(_key, {}).update(data[_key])
+            if isinstance(data.get("shop"), dict):
+                shop_load(data["shop"])
             mp = data.get("multipath")
             if isinstance(mp, dict):
                 cur_mp = CONFIG.setdefault("multipath", {})
@@ -192,6 +194,7 @@ async def save_state():
                 "branding": dict(CONFIG.get("branding", {})),
                 "backup": dict(CONFIG.get("backup", {})),
                 "warp": dict(CONFIG.get("warp", {})),
+                "shop": shop_serialize(),
                 "saved_at": datetime.now().isoformat(),
             }
             tmp = DATA_FILE.with_suffix(".tmp")
@@ -1750,6 +1753,228 @@ async def remove_sub_group(sub_id: str) -> str | None:
     asyncio.create_task(save_state())
     log_activity("sub", f"گروه «{name}» حذف شد", "warn")
     return name
+
+# ── 🛒 فروش خودکار اشتراک (فروشگاه ربات + درگاه پرداخت) ────────────────────────
+from shop import (
+    SHOP as SHOP_STATE,
+    GATEWAYS as SHOP_GATEWAYS,
+    MIN_PRICE_TOMAN,
+    shop_serialize,
+    shop_load,
+    add_plan,
+    update_plan,
+    remove_plan,
+    toggle_plan,
+    get_plan,
+    public_plans,
+    create_order,
+    verify_and_finalize,
+    callback_base,
+    orders_for_chat,
+    orders_recent,
+    shop_stats,
+)
+
+def _shop_ready() -> tuple[bool, str]:
+    """فروشگاه قابل فروش است؟ (روشن باشد + پلن فعال داشته باشد)"""
+    if not SHOP_STATE.get("enabled"):
+        return False, "فروشگاه خاموش است"
+    if not public_plans():
+        return False, "هیچ پلن فعالی تعریف نشده"
+    return True, ""
+
+@app.get("/pay/callback/{order_id}")
+async def shop_payment_callback(order_id: str, request: Request):
+    """مقصد بازگشت از درگاه پرداخت: تأیید (Verify) + صدور خودکار کانفیگ.
+
+    در صورت موفقیت، مرورگر خریدار به صفحه‌ی مشتری همان کانفیگ (/subinfo) هدایت
+    می‌شود و کانفیگ همزمان در تلگرام برایش ارسال می‌شود.
+    """
+    get_host(request)  # کش دامنه‌ی واقعی برای ساخت لینک‌های کانفیگ
+    params = dict(request.query_params)
+    result = await verify_and_finalize(order_id, params, from_callback=True)
+    if result["status"] == "paid" and result.get("link_uid"):
+        return RedirectResponse(url=f"/subinfo/{result['link_uid']}", status_code=302)
+    order = result.get("order") or {}
+    if result["status"] == "pending":
+        html = _shop_result_page("⏳ در حال بررسی پرداخت...", f"سفارش {order.get('id', order_id)} هنوز تأیید نشده است. به ربات تلگرام برگردید و دوباره «✅ پرداخت کردم» را بزنید.", "amber")
+    else:
+        html = _shop_result_page("❌ پرداخت ناموفق بود", f"سفارش {order.get('id', order_id)}: {result.get('message') or 'پرداخت تأیید نشد'}. مبلغی کسر شده باشد تا ۷۲ ساعت بازمی‌گردد. برای خرید دوباره از ربات تلگرام شروع کنید.", "red")
+    return HTMLResponse(content=html, status_code=200)
+
+@app.get("/pay/test/{order_id}", response_class=HTMLResponse)
+async def shop_test_checkout(order_id: str, request: Request):
+    """صفحه‌ی پرداخت آزمایشی درگاه «test» — شبیه‌سازی کامل چرخه بدون پول واقعی."""
+    order = SHOP_STATE["orders"].get(order_id)
+    if not order:
+        return HTMLResponse(content=_shop_result_page("❌ سفارش پیدا نشد", "این سفارش وجود ندارد یا منقضی شده است.", "red"), status_code=404)
+    if order["status"] != "pending":
+        return RedirectResponse(url=f"/pay/callback/{order_id}", status_code=302)
+    base = f"https://{get_host(request)}"
+    return HTMLResponse(content=f"""<!DOCTYPE html>
+<html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>درگاه آزمایشی پرداخت</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box;font-family:Tahoma,sans-serif}}
+body{{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a1020;color:#eff4ff}}
+.card{{background:#0c1326;border:1px solid rgba(96,148,246,.2);border-radius:20px;padding:34px 30px;max-width:400px;width:92%;text-align:center}}
+h1{{font-size:17px;margin-bottom:6px}} .sub{{font-size:11.5px;color:#8aa0c4;margin-bottom:22px}}
+.amt{{font-size:26px;font-weight:800;color:#3fd79c;margin-bottom:4px}} .pln{{font-size:12px;color:#8aa0c4;margin-bottom:26px}}
+.row{{display:flex;gap:10px}} a.btn{{flex:1;padding:13px;border-radius:12px;text-decoration:none;font-size:13.5px;font-weight:700;display:block}}
+.ok{{background:linear-gradient(135deg,#1fb87e,#149a63);color:#fff}} .no{{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fb8585}}
+.badge{{display:inline-block;background:rgba(242,163,61,.12);border:1px solid rgba(242,163,61,.3);color:#f9c988;font-size:10.5px;padding:4px 12px;border-radius:99px;margin-bottom:18px}}
+</style></head><body>
+<div class="card">
+  <div class="badge">⚙️ درگاه آزمایشی — پول واقعی رد و بدل نمی‌شود</div>
+  <h1>پرداخت اشتراک</h1>
+  <div class="sub">سفارش <b dir="ltr">{order_id}</b></div>
+  <div class="amt">{order["amount_toman"]:,} تومان</div>
+  <div class="pln">پلن «{order["plan_name"]}»</div>
+  <div class="row">
+    <a class="btn ok" href="{base}/pay/test/{order_id}/simulate?result=ok">💳 پرداخت موفق (شبیه‌سازی)</a>
+    <a class="btn no" href="{base}/pay/test/{order_id}/simulate?result=fail">✖ لغو</a>
+  </div>
+</div></body></html>""")
+
+@app.get("/pay/test/{order_id}/simulate")
+async def shop_test_simulate(order_id: str, result: str = "ok", request: Request = None):
+    """شبیه‌سازی بازگشت از بانک: به همان مسیر callback استاندارد برمی‌گردد."""
+    get_host(request)
+    status = "NOK" if result == "fail" else "OK"
+    return RedirectResponse(url=f"/pay/callback/{order_id}?status={status}", status_code=302)
+
+def _shop_result_page(title: str, message: str, color: str = "green") -> str:
+    icon_colors = {"green": "#1fb87e", "amber": "#f2a33d", "red": "#ef4444"}
+    c = icon_colors.get(color, "#1fb87e")
+    return f"""<!DOCTYPE html>
+<html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نتیجه پرداخت</title>
+<style>*{{margin:0;padding:0;box-sizing:border-box;font-family:Tahoma,sans-serif}}
+body{{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a1020;color:#eff4ff}}
+.card{{background:#0c1326;border:1px solid rgba(96,148,246,.2);border-radius:20px;padding:36px 30px;max-width:420px;width:92%;text-align:center}}
+h1{{font-size:17px;margin-bottom:12px;color:{c}}} p{{font-size:12.5px;color:#8aa0c4;line-height:2.1}}</style></head>
+<body><div class="card"><h1>{title}</h1><p>{message}</p></div></body></html>"""
+
+# ── API مدیریت فروشگاه (پنل وب) ───────────────────────────────────────────────
+
+@app.get("/api/shop")
+async def shop_get(_=Depends(require_auth)):
+    plans = sorted(SHOP_STATE["plans"].values(), key=lambda p: p.get("price_toman", 0))
+    return {
+        "enabled": bool(SHOP_STATE.get("enabled")),
+        "gateway": SHOP_STATE.get("gateway", "zarinpal"),
+        "gateways": dict(SHOP_GATEWAYS),
+        "merchant_id": SHOP_STATE.get("merchant_id", ""),
+        "sandbox": bool(SHOP_STATE.get("sandbox")),
+        "public_base": SHOP_STATE.get("public_base", ""),
+        "callback_base": callback_base(),
+        "min_price": MIN_PRICE_TOMAN,
+        "plans": plans,
+        "orders": orders_recent(50),
+        "stats": shop_stats(),
+    }
+
+@app.post("/api/shop/config")
+async def shop_set_config(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    if "enabled" in body:
+        SHOP_STATE["enabled"] = bool(body["enabled"])
+    gw = str(body.get("gateway") or "").strip().lower()
+    if gw in SHOP_GATEWAYS:
+        SHOP_STATE["gateway"] = gw
+    if "merchant_id" in body:
+        SHOP_STATE["merchant_id"] = str(body["merchant_id"] or "").strip()[:128]
+    if "sandbox" in body:
+        SHOP_STATE["sandbox"] = bool(body["sandbox"])
+    if "public_base" in body:
+        SHOP_STATE["public_base"] = str(body["public_base"] or "").strip().rstrip("/")
+    log_activity("shop", f"تنظیمات فروشگاه بروزرسانی شد (درگاه: {SHOP_GATEWAYS.get(SHOP_STATE['gateway'], SHOP_STATE['gateway'])}, وضعیت: {'روشن' if SHOP_STATE['enabled'] else 'خاموش'})", "info")
+    await save_state()
+    return {"ok": True}
+
+def _plan_payload_valid(body: dict) -> tuple[dict | None, str]:
+    name = str(body.get("name") or "").strip()
+    if not name:
+        return None, "نام پلن الزامی است"
+    try:
+        price = int(float(body.get("price_toman") or 0))
+        limit_gb = max(0.0, float(body.get("limit_gb") or 0))
+        days = max(0, int(float(body.get("days") or 0)))
+        speed = max(0.0, float(body.get("speed_mbps") or 0))
+        ip_limit = max(0, int(float(body.get("ip_limit") or 0)))
+    except (TypeError, ValueError):
+        return None, "مقادیر عددی پلن نامعتبر است"
+    if price < MIN_PRICE_TOMAN:
+        return None, f"حداقل قیمت {MIN_PRICE_TOMAN:,} تومان است"
+    protocol = str(body.get("protocol") or "").strip()
+    if protocol and protocol not in PROTOCOLS:
+        return None, "پروتکل نامعتبر است"
+    return {"name": name, "price_toman": price, "limit_gb": limit_gb, "days": days, "speed_mbps": speed, "ip_limit": ip_limit, "protocol": protocol}, ""
+
+@app.post("/api/shop/plans")
+async def shop_add_plan_api(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    fields, err = _plan_payload_valid(body)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+    pid, plan = await add_plan(**fields)
+    return {"ok": True, "plan": plan}
+
+@app.post("/api/shop/plans/{plan_id}")
+async def shop_edit_plan_api(plan_id: str, request: Request, _=Depends(require_auth)):
+    if not get_plan(plan_id):
+        return JSONResponse(status_code=404, content={"detail": "پلن پیدا نشد"})
+    body = await request.json()
+    fields, err = _plan_payload_valid(body)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+    plan = await update_plan(plan_id, **fields)
+    await save_state()
+    return {"ok": True, "plan": plan}
+
+@app.post("/api/shop/plans/{plan_id}/toggle")
+async def shop_toggle_plan_api(plan_id: str, _=Depends(require_auth)):
+    plan = await toggle_plan(plan_id)
+    if not plan:
+        return JSONResponse(status_code=404, content={"detail": "پلن پیدا نشد"})
+    await save_state()
+    return {"ok": True, "plan": plan}
+
+@app.delete("/api/shop/plans/{plan_id}")
+async def shop_delete_plan_api(plan_id: str, _=Depends(require_auth)):
+    name = await remove_plan(plan_id)
+    if name is None:
+        return JSONResponse(status_code=404, content={"detail": "پلن پیدا نشد"})
+    await save_state()
+    return {"ok": True, "deleted": name}
+
+@app.get("/api/shop/orders")
+async def shop_orders_api(_=Depends(require_auth)):
+    return {"orders": orders_recent(100), "stats": shop_stats()}
+
+@app.post("/api/shop/orders")
+async def shop_create_order_api(request: Request, _=Depends(require_auth)):
+    """ساخت دستی سفارش/لینک پرداخت توسط ادمین (فروش بدون ربات — مثلاً برای مشتری وب).
+
+    بعد از پرداخت، همان چرخه‌ی خودکار اجرا می‌شود: تأیید درگاه → صدور کانفیگ →
+    ریدایرکت به صفحه‌ی مشتری. اگر chat_id داده شود، تحویل در تلگرام هم انجام می‌شود.
+    """
+    body = await request.json()
+    plan = get_plan(str(body.get("plan_id") or ""))
+    if not plan or not plan.get("active", True):
+        return JSONResponse(status_code=404, content={"detail": "پلن پیدا نشد یا غیرفعال است"})
+    try:
+        chat_id = int(body.get("chat_id") or 0)
+    except (TypeError, ValueError):
+        chat_id = 0
+    order, pay_url, err = await create_order(
+        plan, chat_id, str(body.get("username") or ""), str(body.get("fullname") or ""),
+    )
+    if not pay_url:
+        return JSONResponse(status_code=502, content={"detail": err or "خطای درگاه پرداخت"})
+    return {"ok": True, "order": order, "pay_url": pay_url}
 
 # ── Link Management ───────────────────────────────────────────────────────────
 @app.post("/api/links")
