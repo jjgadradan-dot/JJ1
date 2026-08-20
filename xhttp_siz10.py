@@ -219,6 +219,8 @@ async def _get_or_create_session(uuid: str, mode: str, session_id: str, ip: str 
             "bytes": 0,
             "transport": f"xhttp-{mode}",
         }
+        # ⚡ اگر کانفیگ محدودیت سرعت ندارد، throttle در مسیر داغ اصلاً صدا زده نمی‌شود
+        speed_limited = int((link or {}).get("speed_limit_bytes", 0) or 0) > 0
         sess = {
             "uuid": uuid, "mode": mode, "writer": None,
             "downlink_task": None, "uplink_task": None,
@@ -228,6 +230,7 @@ async def _get_or_create_session(uuid: str, mode: str, session_id: str, ip: str 
             "seq_buf": {}, "next_seq": 0,
             "gate": None,  # لازی ساخته می‌شه: _QuotaGate تطبیقی مخصوص stream-up
             "flow": None,  # لازی ساخته می‌شه: _AdaptiveFlow مخصوص stream-up
+            "speed_limited": speed_limited,
         }
         xhttp_sessions[session_id] = sess
         logger.info(f"new XHTTP[{mode}] session [{session_id[:8]}] uuid={uuid[:8]} ip={ip}")
@@ -288,7 +291,7 @@ def ensure_reaper():
         _reaper_started = True
 
 
-async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue):
+async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue, speed_limited: bool = False):
     first = True
     gate = _QuotaGate(uuid)  # دانلینک هم از همون گیت batched استفاده می‌کنه
     try:
@@ -298,7 +301,8 @@ async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamR
                 break
             if not gate.add(len(data)):
                 break
-            await throttle(uuid, len(data))
+            if speed_limited:
+                await throttle(uuid, len(data))
             async with XHTTP_LOCK:
                 sess = xhttp_sessions.get(session_id)
             if sess:
@@ -374,7 +378,8 @@ async def packet_up_upload(uuid: str, session_id: str, seq: int, request: Reques
     if not check_and_use(uuid, len(body)):
         await _teardown(session_id)
         raise HTTPException(status_code=403, detail="quota/disabled/unknown")
-    await throttle(uuid, len(body))
+    if sess.get("speed_limited"):
+        await throttle(uuid, len(body))
 
     stats["total_requests"] += 1
     connections[sess["conn_id"]]["bytes"] += len(body)
@@ -448,7 +453,8 @@ async def stream_up_upload(uuid: str, session_id: str, request: Request):
 
             if not gate.add(len(chunk)):
                 raise HTTPException(status_code=403, detail="quota/disabled/unknown")
-            await throttle(uuid, len(chunk))
+            if sess.get("speed_limited"):
+                await throttle(uuid, len(chunk))
 
             stats["total_requests"] += 1
             conn["bytes"] += len(chunk)
