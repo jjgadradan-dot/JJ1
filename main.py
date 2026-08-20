@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import os
 import hashlib
@@ -106,6 +107,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "profile-title",
+        "profile-update-interval",
+        "subscription-userinfo",
+        "support-url",
+        "profile-web-page-url",
+        "content-disposition",
+    ],
 )
 
 async def load_state():
@@ -223,7 +232,9 @@ from protocols import (
     FRAGMENT_PACKET_MODES,
     FRAGMENT_PRESETS,
     PROTOCOL_LABELS,
+    PROTOCOL_SHORT_LABELS,
     build_trojan_link,
+    customer_sub_protocols,
     fragment_query_value,
     fragment_summary_fa,
     is_trojan,
@@ -561,25 +572,54 @@ def generate_vless_link(
     query = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     return f"vless://{uuid}@{host}:{port_val}?{query}#{quote(remark)}"
 
-def vless_link_for_link(link: dict, uid: str, host: str) -> str:
+def vless_link_for_link(
+    link: dict,
+    uid: str,
+    host: str,
+    protocol: str | None = None,
+    remark: str | None = None,
+) -> str:
     """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه.
     اگر برای همون کانفیگ دامنه CDN اختصاصی (cdn_host) تنظیم شده باشد، اون اولویت دارد.
-    SNI: مقدار اختصاصی کانفیگ (sni) → SNI پیش‌فرض سراسری Auto-Failover → host."""
-    proto = link.get("protocol", DEFAULT_PROTOCOL)
+    SNI: مقدار اختصاصی کانفیگ (sni) → SNI پیش‌فرض سراسری Auto-Failover → host.
+    اسم کانفیگ فقط برچسب مشتری است؛ حجم و زمان و لوکیشن ردیف‌های جدا در ساب هستند.
+    protocol / remark اختیاری‌اند تا بتوان چند پروتکل از همان UUID ساخت."""
+    primary = link.get("protocol", DEFAULT_PROTOCOL)
+    proto = protocol or primary
+    if proto not in PROTOCOLS:
+        proto = DEFAULT_PROTOCOL
     eff_host = (link.get("cdn_host") or "").strip() or host
     sni = (link.get("sni") or "").strip()
     if not sni:
         sni = CONFIG.get("auto_failover", {}).get("default_sni") or ""
+    # ALPN دستی فقط برای پروتکل اصلی معنا دارد؛ بقیه از پیش‌فرض خود پروتکل می‌آیند
+    alpn = link.get("alpn") if proto == primary else ""
+    label = str(link.get("label") or "").strip()
     return generate_vless_link(
         uid, eff_host,
-        remark=str(link.get("label") or "").strip(),
+        remark=label if remark is None else remark,
         protocol=proto,
         fingerprint=link.get("fingerprint"),
-        alpn=link.get("alpn"),
+        alpn=alpn,
         port=link.get("port"),
         sni=sni,
         fragment=link.get("fragment"),
     )
+
+
+def protocol_remark(link: dict, protocol: str) -> str:
+    """اسم کانفیگ در لیست ساب: نام مشتری + پروتکل کوتاه."""
+    label = str(link.get("label") or "").strip() or "VPN"
+    short = PROTOCOL_SHORT_LABELS.get(protocol, protocol)
+    return f"{label} · {short}"
+
+
+def share_links_for_customer(link: dict, uid: str, host: str) -> list[str]:
+    """سه لینک وصل‌شدنی از همان UUID: VLESS-WS، XHTTP و Trojan."""
+    return [
+        vless_link_for_link(link, uid, host, protocol=p, remark=protocol_remark(link, p))
+        for p in customer_sub_protocols(link.get("protocol"))
+    ]
 
 def uptime() -> str:
     secs = int(time.time() - stats["start_time"])
@@ -633,6 +673,231 @@ def fmt_bytes(b: int) -> str:
     if b < 1024**2: return f"{b/1024:.1f} KB"
     if b < 1024**3: return f"{b/1024**2:.2f} MB"
     return f"{b/1024**3:.2f} GB"
+
+def fmt_bytes_short(b: int) -> str:
+    """نسخهٔ فشرده برای نام کانفیگ داخل v2rayNG (بدون فاصله)."""
+    b = max(0, int(b or 0))
+    if b < 1024:
+        return f"{b}B"
+    if b < 1024 ** 2:
+        return f"{b / 1024:.0f}KB"
+    if b < 1024 ** 3:
+        return f"{b / 1024 ** 2:.1f}MB"
+    return f"{b / 1024 ** 3:.2f}GB"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# نمایش حجم، زمان و نام VPN داخل کلاینت (v2rayNG / Hiddify / Clash / Streisand)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# کلاینت‌ها این اطلاعات را از ردیف‌های جدا در لیست ساب می‌بینند:
+#   ۱) سه کانفیگ واقعی مشتری (VLESS-WS، XHTTP، Trojan) روی همان UUID
+#   ۲) ردیف حجم و زمان
+#   ۳) ردیف لوکیشن
+# به‌علاوه هدر استاندارد subscription-userinfo برای نوار حجم بالای ساب.
+#
+
+def expire_unix(link: dict | None) -> int:
+    """Unix timestamp انقضای کانفیگ؛ ۰ = بدون انقضا."""
+    if not link:
+        return 0
+    exp = link.get("expires_at")
+    if not exp:
+        return 0
+    try:
+        return int(datetime.fromisoformat(str(exp)).timestamp())
+    except Exception:
+        return 0
+
+
+def expire_days_left(link: dict | None) -> int | None:
+    """تعداد روز باقی‌مانده. None = نامحدود، منفی = منقضی."""
+    if not link or not link.get("expires_at"):
+        return None
+    try:
+        dt = datetime.fromisoformat(str(link["expires_at"]))
+        return (dt - datetime.now()).days
+    except Exception:
+        return None
+
+
+def expire_label_fa(link: dict | None) -> str:
+    days = expire_days_left(link)
+    if days is None:
+        return "نامحدود ∞"
+    if days < 0:
+        return "منقضی شده"
+    try:
+        date_txt = datetime.fromisoformat(str(link["expires_at"])).strftime("%Y/%m/%d")
+    except Exception:
+        date_txt = ""
+    if days == 0:
+        return "امروز" + (f" · {date_txt}" if date_txt else "")
+    return f"{days} روز مانده" + (f" · {date_txt}" if date_txt else "")
+
+
+def traffic_parts(links: list[dict]) -> tuple[int, int]:
+    """(مصرف کل، سقف کل). سقف ۰ یعنی حداقل یکی نامحدود است."""
+    used = 0
+    total = 0
+    unlimited = False
+    for link in links:
+        used += max(0, int(link.get("used_bytes", 0) or 0))
+        lb = int(link.get("limit_bytes", 0) or 0)
+        if lb <= 0:
+            unlimited = True
+        else:
+            total += lb
+    return used, (0 if unlimited else total)
+
+
+def remaining_label_fa(used: int, total: int) -> str:
+    if total <= 0:
+        return f"{fmt_bytes_short(used)} / ∞"
+    remain = max(0, total - used)
+    return f"{fmt_bytes_short(used)} از {fmt_bytes_short(total)} (باقی {fmt_bytes_short(remain)})"
+
+
+def usage_remark_suffix(link: dict) -> str:
+    """پسوند کوتاه حجم و زمان برای اسم سرور داخل v2rayNG."""
+    used = max(0, int(link.get("used_bytes", 0) or 0))
+    total = max(0, int(link.get("limit_bytes", 0) or 0))
+    vol = "📦 ∞" if total <= 0 else f"📦 {fmt_bytes_short(max(0, total - used))}"
+    days = expire_days_left(link)
+    if days is None:
+        time_part = "⏳ ∞"
+    elif days < 0:
+        time_part = "⏳ منقضی"
+    else:
+        time_part = f"⏳ {days}روز"
+    return f"{vol} | {time_part}"
+
+
+def link_remark_with_usage(link: dict) -> str:
+    """اسم کامل کانفیگ: نام VPN + لوکیشن + حجم باقی‌مانده + زمان."""
+    label = str(link.get("label") or "").strip() or "VPN"
+    loc = str(link.get("location") or "").strip()
+    head = f"{label} [{loc}]" if loc else label
+    return f"{head} | {usage_remark_suffix(link)}"
+
+
+def subscription_userinfo_header(links: list[dict]) -> str:
+    """هدر استاندارد Clash / v2rayNG / Hiddify / Streisand.
+
+    قالب: upload=0; download=USED; total=LIMIT; expire=UNIX
+    total=0 یا expire=0 یعنی نامحدود.
+    """
+    used, total = traffic_parts(links)
+    times = [expire_unix(l) for l in links if expire_unix(l) > 0]
+    expire = min(times) if times else 0
+    return f"upload=0; download={int(used)}; total={int(total)}; expire={int(expire)}"
+
+
+def profile_title_header(title: str) -> str:
+    """v2rayNG برای عنوان فارسی، مقدار base64:… را ترجیح می‌دهد."""
+    raw = (title or BRAND).strip() or BRAND
+    encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    return f"base64:{encoded}"
+
+
+def support_url_header() -> str:
+    br = CONFIG.get("branding") or {}
+    tg = str(br.get("support_telegram") or "").strip()
+    return tg or "https://t.me/Farajian2004f"
+
+
+def dummy_info_link(remark: str, n: int = 1) -> str:
+    """لینک راهنما که فقط اسمش در لیست کلاینت دیده می‌شود (وصل‌شدنی نیست)."""
+    uid = f"00000000-0000-0000-0000-{n:012d}"
+    return (
+        f"vless://{uid}@127.0.0.1:1?security=none&encryption=none&type=tcp"
+        f"#{quote(remark)}"
+    )
+
+
+def location_label_fa(link: dict | None) -> str:
+    loc = str((link or {}).get("location") or "").strip()
+    return loc if loc else "—"
+
+
+def sub_info_lines_for_link(link: dict, n: int = 1) -> tuple[list[str], int]:
+    """ردیف‌های جدا: حجم و زمان، بعد لوکیشن. اسم مشتری داخل کانفیگ واقعی می‌ماند."""
+    used = max(0, int(link.get("used_bytes", 0) or 0))
+    total = max(0, int(link.get("limit_bytes", 0) or 0))
+    lines = [
+        dummy_info_link(f"📦 حجم: {remaining_label_fa(used, total)}  ·  📅 زمان: {expire_label_fa(link)}", n),
+        dummy_info_link(f"🌐 لوکیشن: {location_label_fa(link)}", n + 1),
+    ]
+    return lines, n + 2
+
+
+def sub_info_lines(links: list[dict], title: str = "") -> list[str]:
+    """ردیف‌های راهنمای جدا از کانفیگ مشتری: حجم/زمان و لوکیشن."""
+    if not links:
+        return []
+    if len(links) == 1:
+        lines, _ = sub_info_lines_for_link(links[0], 1)
+        return lines
+    used, total = traffic_parts(links)
+    dated = [l for l in links if expire_unix(l) > 0]
+    exp_txt = expire_label_fa(min(dated, key=expire_unix)) if dated else "نامحدود ∞"
+    locs: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        loc = str(link.get("location") or "").strip()
+        if loc and loc not in seen:
+            seen.add(loc)
+            locs.append(loc)
+    return [
+        dummy_info_link(f"📦 حجم: {remaining_label_fa(used, total)}  ·  📅 زمان: {exp_txt}", 1),
+        dummy_info_link(f"🌐 لوکیشن: {'، '.join(locs) if locs else '—'}", 2),
+    ]
+
+
+def build_subscription_lines(items: list[tuple[str, dict]], host: str) -> list[str]:
+    """ترتیب لیست در v2rayNG: سه پروتکل مشتری، بعد حجم و زمان، بعد لوکیشن."""
+    out: list[str] = []
+    n = 1
+    for uid, link in items:
+        out.extend(share_links_for_customer(link, uid, host))
+        extras, n = sub_info_lines_for_link(link, n)
+        out.extend(extras)
+    return out
+
+
+def _ascii_filename(title: str) -> str:
+    raw = "".join(
+        ch if ch.isascii() and (ch.isalnum() or ch in "-_.") else "_"
+        for ch in (title or "subscription")
+    )[:40].strip("._")
+    return raw or "subscription"
+
+
+def build_subscription_headers(title: str, links: list[dict], web_url: str = "") -> dict:
+    """هدرهایی که v2rayNG / Clash / Hiddify برای نوار حجم و انقضا می‌خوانند.
+
+    هدر HTTP باید latin-1 باشد؛ برای همین عنوان فارسی base64 می‌شود
+    و هیچ متن فارسی خامی داخل هدر نمی‌رود.
+    """
+    headers = {
+        "profile-title": profile_title_header(title),
+        "profile-update-interval": "1",
+        "subscription-userinfo": subscription_userinfo_header(links),
+        "support-url": support_url_header(),
+        "Content-Disposition": f'attachment; filename="{_ascii_filename(title)}.txt"',
+        "Access-Control-Expose-Headers": (
+            "profile-title, profile-update-interval, subscription-userinfo, "
+            "support-url, profile-web-page-url, content-disposition"
+        ),
+    }
+    if web_url:
+        headers["profile-web-page-url"] = web_url
+    return headers
+
+
+def encode_subscription(lines: list[str]) -> str:
+    body = "\n".join(line for line in lines if line)
+    return base64.b64encode(body.encode("utf-8")).decode("ascii")
 
 def unique_ips_for_uuid(uuid: str) -> set:
     """آی‌پی‌های یکتای همین لحظه متصل به یک UUID خاص (بر اساس dict اتصالات زنده)."""
@@ -706,29 +971,38 @@ async def health():
 # ── Subscription (single link) ────────────────────────────────────────────────
 @app.get("/sub/{uuid}")
 async def subscription_single(uuid: str, request: Request):
-    import base64
     async with LINKS_LOCK:
-        link = LINKS.get(uuid)
+        link = dict(LINKS[uuid]) if uuid in LINKS else None
     if not link or not is_link_allowed(link):
         raise HTTPException(status_code=404, detail="not found or inactive")
     host = get_host(request)
-    vless = vless_link_for_link(link, uuid, host)
-    content = base64.b64encode(vless.encode()).decode()
-    return Response(content=content, media_type="text/plain",
-                    headers={"profile-title": quote(link["label"]), "support-url": "https://t.me/Farajian2004f"})
+    content = encode_subscription(build_subscription_lines([(uuid, link)], host))
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers=build_subscription_headers(
+            link.get("label") or BRAND,
+            [link],
+            f"https://{host}/subinfo/{uuid}",
+        ),
+    )
 
 @app.get("/sub-all")
 async def subscription_all(request: Request, _=Depends(require_auth)):
-    import base64
     host = get_host(request)
     async with LINKS_LOCK:
-        allowed = [(uid, d) for uid, d in LINKS.items() if is_link_allowed(d)]
+        allowed = [(uid, dict(d)) for uid, d in LINKS.items() if is_link_allowed(d)]
     # ⚖️ لودبالانسر هوشمند: سالم‌ترین/سریع‌ترین سرور همیشه ردیف اول
     order = load_balancer.sort_uids([uid for uid, _ in allowed])
     by_uid = dict(allowed)
-    lines = [vless_link_for_link(by_uid[uid], uid, host) for uid in order]
-    content = base64.b64encode("\n".join(lines).encode()).decode()
-    return Response(content=content, media_type="text/plain")
+    items = [(uid, by_uid[uid]) for uid in order]
+    snap = [by_uid[uid] for uid in order]
+    content = encode_subscription(build_subscription_lines(items, host))
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers=build_subscription_headers(BRAND, snap),
+    )
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SUB GROUP endpoints
@@ -847,9 +1121,8 @@ async def assign_link_to_sub(sub_id: str, request: Request, _=Depends(require_au
 # ── Public sub-group subscription file ───────────────────────────────────────
 @app.get("/sub-group/{uuid_key}")
 async def sub_group_subscription(uuid_key: str, request: Request):
-    import base64
     async with SUBS_LOCK:
-        sub = next((s for s in SUBS.values() if s.get("uuid_key") == uuid_key), None)
+        sub = next((dict(s) for s in SUBS.values() if s.get("uuid_key") == uuid_key), None)
     if not sub:
         raise HTTPException(status_code=404, detail="not found")
 
@@ -864,20 +1137,18 @@ async def sub_group_subscription(uuid_key: str, request: Request):
         usable = {lid: dict(LINKS[lid]) for lid in link_ids
                   if LINKS.get(lid) and is_link_allowed(LINKS[lid])}
     # ⚖️ لودبالانسر هوشمند: پایدارترین سرور در بالاترین ردیف ساب قرار می‌گیرد
-    lines = [
-        vless_link_for_link(usable[lid], lid, host)
-        for lid in load_balancer.sort_uids([l for l in link_ids if l in usable])
-    ]
-
-    content = base64.b64encode("\n".join(lines).encode()).decode()
+    order = load_balancer.sort_uids([l for l in link_ids if l in usable])
+    items = [(lid, usable[lid]) for lid in order]
+    snap = [usable[lid] for lid in order]
+    content = encode_subscription(build_subscription_lines(items, host))
     return Response(
         content=content,
-        media_type="text/plain",
-        headers={
-            "profile-title": quote(sub["name"]),
-            "support-url": "https://t.me/Farajian2004f",
-            "profile-update-interval": "12",
-        }
+        media_type="text/plain; charset=utf-8",
+        headers=build_subscription_headers(
+            sub.get("name") or BRAND,
+            snap,
+            f"https://{host}/p/{uuid_key}",
+        ),
     )
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
@@ -1811,7 +2082,6 @@ async def node_delete_config(node_id: str, config_id: str, _=Depends(require_aut
 @app.get("/api/nodes-subscription")
 async def nodes_subscription(_=Depends(require_auth)):
     """Aggregate share links exposed by configured nodes into one base64 subscription."""
-    import base64
     links = []
     errors = []
     async with NODES_LOCK:
@@ -1826,8 +2096,12 @@ async def nodes_subscription(_=Depends(require_auth)):
                     links.append(value)
         except Exception as exc:
             errors.append(f"{node.get('name', node_id)}: {exc}")
-    content = base64.b64encode("\n".join(links).encode()).decode()
-    return Response(content=content, media_type="text/plain", headers={"X-RVG-Node-Errors": str(len(errors))})
+    content = encode_subscription(links)
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"X-RVG-Node-Errors": str(len(errors))},
+    )
 
 # ══════════════════════════════════════════════════════════════════════════════
 # This RVG is a NODE. The master panel talks to /api/node/v1 with Bearer token.
@@ -2201,13 +2475,16 @@ async def node_api_delete_config(uid: str, _=Depends(require_node_api)):
 
 @app.get("/api/node/v1/subscription")
 async def node_api_subscription(request: Request, _=Depends(require_node_api)):
-    import base64
     host = get_host(request)
     async with LINKS_LOCK:
-        lines = [vless_link_for_link(d, uid, host) for uid, d in LINKS.items() if is_link_allowed(d)]
-    content = base64.b64encode("\n".join(lines).encode()).decode()
-    return Response(content=content, media_type="text/plain",
-                    headers={"profile-title": quote(BRAND), "support-url": "https://t.me/Farajian2004f"})
+        allowed = [(uid, dict(d)) for uid, d in LINKS.items() if is_link_allowed(d)]
+    snap = [d for _, d in allowed]
+    content = encode_subscription(build_subscription_lines(allowed, host))
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers=build_subscription_headers(BRAND, snap),
+    )
 
 
 @app.get("/api/node/v1/subs")

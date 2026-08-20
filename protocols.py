@@ -30,6 +30,32 @@ PROTOCOL_LABELS = {
     "trojan-ws": "Trojan + WebSocket",
 }
 
+# اسم کوتاه داخل لیست v2rayNG تا سه پروتکل یک مشتری قاطی نشوند
+PROTOCOL_SHORT_LABELS = {
+    "vless-ws": "VLESS-WS",
+    "xhttp-packet-up": "XHTTP-packet",
+    "xhttp-stream-up": "XHTTP-stream",
+    "xhttp-stream-one": "XHTTP",
+    "trojan-ws": "Trojan",
+}
+
+
+def customer_sub_protocols(primary: str | None) -> list[str]:
+    """سه پروتکل جدا برای ساب مشتری از روی همان UUID.
+
+    ترتیب: پروتکل انتخاب‌شدهٔ ادمین اول، بعد دو خانوادهٔ دیگر
+    (VLESS-WS، یک مد XHTTP، Trojan) تا اگر یکی فیلتر شد بقیه وصل شوند.
+    """
+    primary = (primary or "").strip().lower()
+    if primary not in ALL_PROTOCOLS:
+        primary = "vless-ws"
+    xhttp = primary if primary.startswith("xhttp-") else "xhttp-stream-one"
+    out: list[str] = []
+    for p in (primary, "vless-ws", xhttp, "trojan-ws"):
+        if p not in out:
+            out.append(p)
+    return out[:3]
+
 
 def is_trojan(protocol: str) -> bool:
     return (protocol or "") in TROJAN_PROTOCOLS
