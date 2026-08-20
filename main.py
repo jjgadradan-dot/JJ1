@@ -38,6 +38,87 @@ DATA_FILE = DATA_DIR / "x4g_state.json"
 SECRET_FILE = DATA_DIR / "x4g_secret.key"
 SAVE_LOCK = asyncio.Lock()
 
+# ── Cloudflare KV storage ─────────────────────────────────────────────────────
+# اگر این متغیرها تنظیم شوند، وضعیت کامل پنل علاوه بر فایل محلی در Cloudflare KV
+# هم ذخیره می‌شود و پنل جدید با همین تنظیمات، همهٔ کانفیگ‌ها/گروه‌ها/نودها و
+# تنظیمات را از KV بالا می‌آورد.
+KV_CONFIG = {
+    "enabled": os.environ.get("CF_KV_ENABLED", os.environ.get("CLOUDFLARE_KV_ENABLED", "1")).strip()
+    not in ("0", "false", "no", "off", ""),
+    "account_id": (os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or "").strip(),
+    "namespace_id": (
+        os.environ.get("CF_KV_NAMESPACE_ID")
+        or os.environ.get("CLOUDFLARE_KV_NAMESPACE_ID")
+        or os.environ.get("KV_NAMESPACE_ID")
+        or ""
+    ).strip(),
+    "api_token": (os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or "").strip(),
+    "key": (os.environ.get("CF_KV_KEY") or os.environ.get("CLOUDFLARE_KV_KEY") or "x4g_state.json").strip(),
+}
+# اگر خواندن KV به‌خاطر خطای شبکه/دسترسی شکست بخورد، تا وقتی state محلی سالم
+# بارگذاری نشود یا ادمین sync دستی نزند، نوشتن روی KV متوقف می‌شود تا دیتای پنل
+# جدید تصادفاً با state خالی جایگزین نشود.
+KV_WRITE_SUSPENDED = False
+
+def kv_is_configured() -> bool:
+    return bool(
+        KV_CONFIG.get("enabled")
+        and KV_CONFIG.get("account_id")
+        and KV_CONFIG.get("namespace_id")
+        and KV_CONFIG.get("api_token")
+        and KV_CONFIG.get("key")
+    )
+
+def kv_status_public() -> dict:
+    return {
+        "enabled": bool(KV_CONFIG.get("enabled")),
+        "configured": kv_is_configured(),
+        "account_id": (KV_CONFIG.get("account_id")[:6] + "…") if KV_CONFIG.get("account_id") else "",
+        "namespace_id": (KV_CONFIG.get("namespace_id")[:6] + "…") if KV_CONFIG.get("namespace_id") else "",
+        "key": KV_CONFIG.get("key") or "",
+        "has_token": bool(KV_CONFIG.get("api_token")),
+        "write_suspended": bool(KV_WRITE_SUSPENDED),
+    }
+
+
+def _env_has_kv_value(name: str) -> bool:
+    aliases = {
+        "enabled": ("CF_KV_ENABLED", "CLOUDFLARE_KV_ENABLED"),
+        "account_id": ("CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID"),
+        "namespace_id": ("CF_KV_NAMESPACE_ID", "CLOUDFLARE_KV_NAMESPACE_ID", "KV_NAMESPACE_ID"),
+        "api_token": ("CF_API_TOKEN", "CLOUDFLARE_API_TOKEN"),
+        "key": ("CF_KV_KEY", "CLOUDFLARE_KV_KEY"),
+    }
+    return any(os.environ.get(k) for k in aliases.get(name, ()))
+
+
+def load_kv_config_file() -> None:
+    """KV credentials saved from the dashboard. Environment variables always win."""
+    try:
+        path = DATA_DIR / "x4g_kv_config.json"
+        if not path.exists():
+            return
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict):
+            return
+        for key in ("account_id", "namespace_id", "api_token", "key"):
+            if saved.get(key) and not _env_has_kv_value(key):
+                KV_CONFIG[key] = str(saved[key]).strip()
+        if "enabled" in saved and not _env_has_kv_value("enabled"):
+            KV_CONFIG["enabled"] = bool(saved["enabled"])
+    except Exception as e:
+        logger.warning(f"Could not load Cloudflare KV config file: {e}")
+
+
+def save_kv_config_file() -> None:
+    """Persist dashboard-entered KV credentials locally (not inside the KV state payload)."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        path = DATA_DIR / "x4g_kv_config.json"
+        path.write_text(json.dumps(KV_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Could not save Cloudflare KV config file: {e}")
+
 def _load_or_create_secret() -> str:
     """SECRET_KEY را روی دیسک ذخیره و ثابت نگه می‌دارد.
     قبلاً وقتی متغیر محیطی SECRET_KEY تنظیم نشده بود، با هر ری‌استارت سرویس
@@ -99,6 +180,11 @@ CONFIG = {
     "backup": {},
     # 🌐 خروجی کلودفلر WARP برای رفع تحریم OpenAI/Netflix و مخفی‌سازی IP سرور (از Nyx)
     "warp": {},
+    # 🔁 انتقال خودکار لینک‌های ساب مشتری به پنل/دامنه جدید
+    "subscription": {
+        "domain": os.environ.get("SUBSCRIPTION_DOMAIN", os.environ.get("PUBLIC_PANEL_DOMAIN", "")).strip(),
+        "redirect": os.environ.get("SUBSCRIPTION_REDIRECT", "1").strip() not in ("0", "false", "no", "off", ""),
+    },
 }
 
 app.add_middleware(
@@ -117,89 +203,249 @@ app.add_middleware(
     ],
 )
 
-async def load_state():
-    global LINKS, AUTH, SUBS, NODES, NODE_API, MASTER
+def build_state_payload() -> dict:
+    """یک snapshot کامل از وضعیت قابل‌انتقال پنل می‌سازد."""
+    return {
+        "schema_version": 2,
+        "storage": "cloudflare-kv-compatible",
+        "links": dict(LINKS),
+        "subs": dict(SUBS),
+        "nodes": dict(NODES),
+        "node_api": dict(NODE_API),
+        "master": dict(MASTER),
+        "password_hash": AUTH["password_hash"],
+        # برای اینکه پنل جدید با همان پسورد بتواند وارد شود و UUID لینک پیش‌فرض هم ثابت بماند.
+        # اگر SECRET_KEY در محیط تنظیم شده باشد، مقدار env همچنان در زمان اجرا اولویت دارد.
+        "secret": CONFIG.get("secret", ""),
+        "cdn_domain": CONFIG.get("cdn_domain", ""),
+        "auto_failover": dict(CONFIG.get("auto_failover", {})),
+        "multipath": dict(CONFIG.get("multipath", {})),
+        "branding": dict(CONFIG.get("branding", {})),
+        "backup": dict(CONFIG.get("backup", {})),
+        "warp": dict(CONFIG.get("warp", {})),
+        "subscription": dict(CONFIG.get("subscription", {})),
+        "stats": {
+            "total_bytes": stats.get("total_bytes", 0),
+            "total_requests": stats.get("total_requests", 0),
+            "total_errors": stats.get("total_errors", 0),
+        },
+        "hourly_traffic": dict(hourly_traffic),
+        "activity_logs": list(activity_logs),
+        "error_logs": list(error_logs),
+        "saved_at": datetime.now().isoformat(),
+    }
+
+
+def apply_state_payload(data: dict) -> None:
+    """وضعیت ذخیره‌شده را روی حافظهٔ فعلی اعمال می‌کند."""
+    if not isinstance(data, dict):
+        raise ValueError("state payload must be a JSON object")
+
+    LINKS.clear()
+    LINKS.update(data.get("links", {}) or {})
+    SUBS.clear()
+    SUBS.update(data.get("subs", {}) or {})
+    NODES.clear()
+    NODES.update(data.get("nodes", {}) or {})
+    NODE_API.clear()
+    NODE_API.update(data.get("node_api", {}) or {})
+    MASTER.clear()
+    MASTER.update(data.get("master", {}) or {})
+
+    # اگر secret از KV/بکاپ آمد و SECRET_KEY دستی تنظیم نشده بود، با همان secret کار کن
+    # تا hash پسورد و لینک پیش‌فرض در پنل جدید دقیقاً یکسان بماند.
+    saved_secret = str(data.get("secret") or "").strip()
+    if saved_secret and not os.environ.get("SECRET_KEY"):
+        CONFIG["secret"] = saved_secret
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            SECRET_FILE.write_text(saved_secret, encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Could not persist SECRET_KEY loaded from state: {e}")
+
+    if "password_hash" in data:
+        AUTH["password_hash"] = data["password_hash"]
+    if "cdn_domain" in data:
+        CONFIG["cdn_domain"] = str(data.get("cdn_domain") or "").strip()
+
+    af = data.get("auto_failover")
+    if isinstance(af, dict):
+        cur = CONFIG.setdefault("auto_failover", {})
+        if "enabled" in af:
+            cur["enabled"] = bool(af["enabled"])
+        if "interval" in af:
+            try:
+                cur["interval"] = max(10, int(af["interval"]))
+            except (TypeError, ValueError):
+                pass
+        if "default_sni" in af:
+            cur["default_sni"] = str(af["default_sni"] or "").strip()
+
+    mp = data.get("multipath")
+    if isinstance(mp, dict):
+        cur_mp = CONFIG.setdefault("multipath", {})
+        for flag in ("enabled", "lb_enabled", "panic_alerts"):
+            if flag in mp:
+                cur_mp[flag] = bool(mp[flag])
+        if "interval" in mp:
+            try:
+                cur_mp["interval"] = max(5, int(mp["interval"]))
+            except (TypeError, ValueError):
+                pass
+        if "lb_interval" in mp:
+            try:
+                cur_mp["lb_interval"] = max(10, int(mp["lb_interval"]))
+            except (TypeError, ValueError):
+                pass
+
+    for key in ("branding", "backup", "warp"):
+        if isinstance(data.get(key), dict):
+            CONFIG[key] = data[key] if key == "branding" else {**CONFIG.setdefault(key, {}), **data[key]}
+    sub_cfg = data.get("subscription")
+    if isinstance(sub_cfg, dict):
+        cur_sub = CONFIG.setdefault("subscription", {})
+        if "domain" in sub_cfg:
+            cur_sub["domain"] = clean_cdn_domain(str(sub_cfg.get("domain") or ""))
+        if "redirect" in sub_cfg:
+            cur_sub["redirect"] = bool(sub_cfg.get("redirect"))
+
+    st = data.get("stats")
+    if isinstance(st, dict):
+        for key in ("total_bytes", "total_requests", "total_errors"):
+            try:
+                stats[key] = int(st.get(key, stats.get(key, 0)) or 0)
+            except (TypeError, ValueError):
+                pass
+
+    hourly_traffic.clear()
+    for k, v in (data.get("hourly_traffic") or {}).items():
+        try:
+            hourly_traffic[k] = int(v or 0)
+        except (TypeError, ValueError):
+            continue
+
+    activity_logs.clear()
+    for item in (data.get("activity_logs") or [])[-activity_logs.maxlen:]:
+        if isinstance(item, dict):
+            activity_logs.append(item)
+    error_logs.clear()
+    for item in (data.get("error_logs") or [])[-error_logs.maxlen:]:
+        error_logs.append(item)
+
+
+async def _with_http_client(method: str, url: str, **kwargs) -> httpx.Response:
+    """از http_client برنامه استفاده می‌کند؛ اگر هنوز ساخته نشده بود، موقت می‌سازد."""
+    if http_client is not None:
+        return await http_client.request(method, url, **kwargs)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0), follow_redirects=True) as client:
+        return await client.request(method, url, **kwargs)
+
+
+def _kv_value_url() -> str:
+    key = quote(str(KV_CONFIG.get("key") or "x4g_state.json"), safe="")
+    return (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{KV_CONFIG['account_id']}/storage/kv/namespaces/{KV_CONFIG['namespace_id']}/values/{key}"
+    )
+
+
+async def load_state_from_kv() -> dict | None:
+    global KV_WRITE_SUSPENDED
+    if not kv_is_configured():
+        return None
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        if DATA_FILE.exists():
+        response = await _with_http_client(
+            "GET",
+            _kv_value_url(),
+            headers={"Authorization": f"Bearer {KV_CONFIG['api_token']}", "Accept": "application/json"},
+        )
+        if response.status_code == 404:
+            KV_WRITE_SUSPENDED = False
+            logger.info("Cloudflare KV state key not found; local state will be used")
+            return None
+        if response.status_code >= 400:
+            KV_WRITE_SUSPENDED = True
+            logger.warning(f"Cloudflare KV load failed ({response.status_code}); KV writes suspended: {response.text[:300]}")
+            return None
+        KV_WRITE_SUSPENDED = False
+        return response.json()
+    except Exception as e:
+        KV_WRITE_SUSPENDED = True
+        logger.warning(f"Cloudflare KV load failed; KV writes suspended: {e}")
+        return None
+
+
+async def save_state_to_kv(data: dict) -> bool:
+    if not kv_is_configured():
+        return False
+    try:
+        response = await _with_http_client(
+            "PUT",
+            _kv_value_url(),
+            content=json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {KV_CONFIG['api_token']}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+        if response.status_code >= 400:
+            logger.warning(f"Cloudflare KV save failed ({response.status_code}): {response.text[:300]}")
+            return False
+        try:
+            body = response.json()
+            if isinstance(body, dict) and body.get("success") is False:
+                logger.warning(f"Cloudflare KV save failed: {body}")
+                return False
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        logger.warning(f"Cloudflare KV save failed: {e}")
+        return False
+
+
+async def load_state():
+    """ابتدا از Cloudflare KV و در صورت نبود/خطا از فایل محلی وضعیت را می‌خواند."""
+    global KV_WRITE_SUSPENDED
+    try:
+        load_kv_config_file()
+        data = await load_state_from_kv()
+        source = "Cloudflare KV"
+        if data is None:
+            source = "local file"
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            if not DATA_FILE.exists():
+                logger.info("No persisted state found yet")
+                return
             async with aiofiles.open(DATA_FILE, "r", encoding="utf-8") as f:
                 raw = await f.read()
             data = json.loads(raw)
-            LINKS.update(data.get("links", {}))
-            SUBS.update(data.get("subs", {}))
-            NODES.update(data.get("nodes", {}))
-            if data.get("node_api"):
-                NODE_API.update(data["node_api"])
-            if data.get("master"):
-                MASTER.update(data["master"])
-            if "password_hash" in data:
-                AUTH["password_hash"] = data["password_hash"]
-            cdn = data.get("cdn_domain")
-            if cdn:
-                CONFIG["cdn_domain"] = str(cdn).strip()
-            af = data.get("auto_failover")
-            if isinstance(af, dict):
-                cur = CONFIG.setdefault("auto_failover", {})
-                if "enabled" in af:
-                    cur["enabled"] = bool(af["enabled"])
-                if "interval" in af:
-                    try:
-                        cur["interval"] = max(10, int(af["interval"]))
-                    except (TypeError, ValueError):
-                        pass
-                if "default_sni" in af:
-                    cur["default_sni"] = str(af["default_sni"] or "").strip()
-            br = data.get("branding")
-            if isinstance(br, dict):
-                CONFIG["branding"] = br
-            for _key in ("backup", "warp"):
-                if isinstance(data.get(_key), dict):
-                    CONFIG.setdefault(_key, {}).update(data[_key])
-            mp = data.get("multipath")
-            if isinstance(mp, dict):
-                cur_mp = CONFIG.setdefault("multipath", {})
-                for flag in ("enabled", "lb_enabled", "panic_alerts"):
-                    if flag in mp:
-                        cur_mp[flag] = bool(mp[flag])
-                if "interval" in mp:
-                    try:
-                        cur_mp["interval"] = max(5, int(mp["interval"]))
-                    except (TypeError, ValueError):
-                        pass
-                if "lb_interval" in mp:
-                    try:
-                        cur_mp["lb_interval"] = max(10, int(mp["lb_interval"]))
-                    except (TypeError, ValueError):
-                        pass
-            logger.info(f"State loaded: {len(LINKS)} links, {len(SUBS)} subs")
+            # چون یک state محلی معتبر داریم، اجازه داریم پس از تغییرات بعدی دوباره KV را sync کنیم.
+            KV_WRITE_SUSPENDED = False
+        apply_state_payload(data)
+        logger.info(f"State loaded from {source}: {len(LINKS)} links, {len(SUBS)} subs")
     except Exception as e:
         logger.warning(f"Could not load state: {e}")
 
+
 async def save_state():
     async with SAVE_LOCK:
+        data = build_state_payload()
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
-            data = {
-                "links": dict(LINKS),
-                "subs": dict(SUBS),
-                "nodes": dict(NODES),
-                "node_api": dict(NODE_API),
-                "master": dict(MASTER),
-                "password_hash": AUTH["password_hash"],
-                "cdn_domain": CONFIG.get("cdn_domain", ""),
-                "auto_failover": dict(CONFIG.get("auto_failover", {})),
-                "multipath": dict(CONFIG.get("multipath", {})),
-                "branding": dict(CONFIG.get("branding", {})),
-                "backup": dict(CONFIG.get("backup", {})),
-                "warp": dict(CONFIG.get("warp", {})),
-                "saved_at": datetime.now().isoformat(),
-            }
             tmp = DATA_FILE.with_suffix(".tmp")
             async with aiofiles.open(tmp, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, ensure_ascii=False, indent=2))
             tmp.replace(DATA_FILE)
         except Exception as e:
-            logger.warning(f"Could not save state: {e}")
+            logger.warning(f"Could not save local state: {e}")
+        if kv_is_configured():
+            if KV_WRITE_SUSPENDED:
+                logger.warning("Cloudflare KV write skipped because startup load failed; use /api/storage/sync to force sync")
+            else:
+                ok = await save_state_to_kv(data)
+                if ok:
+                    logger.info(f"State synced to Cloudflare KV key {KV_CONFIG.get('key')}")
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 connections: dict = {}
@@ -479,6 +725,37 @@ def current_cdn_domain() -> str:
     """دامنه CDN سراسری فعال (خالی = غیرفعال)."""
     return (CONFIG.get("cdn_domain") or "").strip()
 
+
+def current_subscription_domain() -> str:
+    """دامنه پنل/ساب جدید برای انتقال خودکار مشتری‌ها (خالی = همین دامنه درخواست)."""
+    return clean_cdn_domain((CONFIG.get("subscription") or {}).get("domain") or "")
+
+
+def subscription_redirect_enabled() -> bool:
+    return bool((CONFIG.get("subscription") or {}).get("redirect", True))
+
+
+def request_host_only(request: Request | None = None) -> str:
+    if request is not None:
+        h = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        if h:
+            return h.split(":")[0].strip().lower()
+    return ""
+
+
+def maybe_redirect_to_subscription_domain(request: Request) -> RedirectResponse | None:
+    """اگر لینک قدیمی روی دامنه قبلی باز شد، به دامنه/پنل جدید منتقلش کن."""
+    target = current_subscription_domain()
+    if not target or not subscription_redirect_enabled():
+        return None
+    current = request_host_only(request)
+    if current and current == target.split(":")[0].lower():
+        return None
+    path = request.url.path
+    query = f"?{request.url.query}" if request.url.query else ""
+    return RedirectResponse(f"https://{target}{path}{query}", status_code=307)
+
+
 def get_host(request: Request | None = None) -> str:
     """آدرس دامنه رو ترجیحاً از خودِ درخواست HTTP می‌گیره (هدر Host/X-Forwarded-Host)
     چون این همیشه دقیقاً همون دامنه‌ایه که کاربر واقعاً بهش وصل شده. متغیر محیطی
@@ -492,6 +769,9 @@ def get_host(request: Request | None = None) -> str:
     cdn = current_cdn_domain()
     if cdn:
         return cdn
+    sub_domain = current_subscription_domain()
+    if sub_domain:
+        return sub_domain
     if request is not None:
         h = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if h:
@@ -971,6 +1251,9 @@ async def health():
 # ── Subscription (single link) ────────────────────────────────────────────────
 @app.get("/sub/{uuid}")
 async def subscription_single(uuid: str, request: Request):
+    redir = maybe_redirect_to_subscription_domain(request)
+    if redir:
+        return redir
     async with LINKS_LOCK:
         link = dict(LINKS[uuid]) if uuid in LINKS else None
     if not link or not is_link_allowed(link):
@@ -1121,6 +1404,9 @@ async def assign_link_to_sub(sub_id: str, request: Request, _=Depends(require_au
 # ── Public sub-group subscription file ───────────────────────────────────────
 @app.get("/sub-group/{uuid_key}")
 async def sub_group_subscription(uuid_key: str, request: Request):
+    redir = maybe_redirect_to_subscription_domain(request)
+    if redir:
+        return redir
     async with SUBS_LOCK:
         sub = next((dict(s) for s in SUBS.values() if s.get("uuid_key") == uuid_key), None)
     if not sub:
@@ -1176,6 +1462,71 @@ async def api_logout(request: Request):
 async def api_me(request: Request):
     return {"authenticated": await is_valid_session(request.cookies.get(SESSION_COOKIE))}
 
+@app.get("/api/storage/status")
+async def api_storage_status(_=Depends(require_auth)):
+    return {
+        "ok": True,
+        "local_file": str(DATA_FILE),
+        "cloudflare_kv": kv_status_public(),
+        "links_count": len(LINKS),
+        "subs_count": len(SUBS),
+        "last_saved_key": KV_CONFIG.get("key") or "",
+    }
+
+@app.post("/api/storage/config")
+async def api_storage_config(request: Request, _=Depends(require_auth)):
+    """ثبت مشخصات Cloudflare KV از داخل پنل. پس از ثبت، با pull اطلاعات KV را بالا بکشید."""
+    global KV_WRITE_SUSPENDED
+    body = await request.json()
+    if "enabled" in body:
+        KV_CONFIG["enabled"] = bool(body["enabled"])
+    for key in ("account_id", "namespace_id"):
+        if key in body:
+            val = str(body.get(key) or "").strip()
+            if val:
+                KV_CONFIG[key] = val
+            elif body.get(f"clear_{key}"):
+                KV_CONFIG[key] = ""
+    if "key" in body:
+        val = str(body.get("key") or "").strip()
+        if val:
+            KV_CONFIG["key"] = val
+    token = str(body.get("api_token") or "").strip()
+    if token:
+        KV_CONFIG["api_token"] = token
+    if body.get("clear_token"):
+        KV_CONFIG["api_token"] = ""
+    if not KV_CONFIG.get("key"):
+        KV_CONFIG["key"] = "x4g_state.json"
+    save_kv_config_file()
+    KV_WRITE_SUSPENDED = False
+    log_activity("settings", "مشخصات Cloudflare KV از داخل پنل ذخیره شد", "ok")
+    return {"ok": True, "cloudflare_kv": kv_status_public()}
+
+@app.post("/api/storage/pull")
+async def api_storage_pull(_=Depends(require_auth)):
+    """دیتای Cloudflare KV را به‌عنوان منبع اصلی وارد این پنل می‌کند."""
+    if not kv_is_configured():
+        raise HTTPException(status_code=400, detail="مشخصات Cloudflare KV کامل نیست")
+    data = await load_state_from_kv()
+    if data is None:
+        raise HTTPException(status_code=404, detail="هیچ state معتبری در KV پیدا نشد یا خواندن KV ناموفق بود")
+    apply_state_payload(data)
+    await save_state()
+    log_activity("settings", "اطلاعات پنل از Cloudflare KV دریافت و اعمال شد", "ok")
+    return {"ok": True, "links_count": len(LINKS), "subs_count": len(SUBS), "cloudflare_kv": kv_status_public()}
+
+@app.post("/api/storage/sync")
+async def api_storage_sync(_=Depends(require_auth)):
+    global KV_WRITE_SUSPENDED
+    if not kv_is_configured():
+        raise HTTPException(status_code=400, detail="مشخصات Cloudflare KV کامل نیست")
+    # ادمین با این endpoint عمداً وضعیت فعلی پنل را منبع حقیقت می‌کند.
+    KV_WRITE_SUSPENDED = False
+    await save_state()
+    log_activity("settings", "وضعیت فعلی پنل به Cloudflare KV ارسال شد", "ok")
+    return {"ok": True, "cloudflare_kv": kv_status_public()}
+
 @app.post("/api/change-password")
 async def api_change_password(request: Request, token=Depends(require_auth)):
     body = await request.json()
@@ -1191,6 +1542,35 @@ async def api_change_password(request: Request, token=Depends(require_auth)):
     await save_state()
     log_activity("auth", "رمز عبور پنل تغییر کرد", "ok")
     return {"ok": True}
+
+# ── Customer subscription migration / new panel domain ───────────────────────
+@app.get("/api/subscription-domain")
+async def api_get_subscription_domain(_=Depends(require_auth)):
+    sub = CONFIG.setdefault("subscription", {})
+    domain = current_subscription_domain()
+    return {"ok": True, "domain": domain, "redirect": bool(sub.get("redirect", True)), "active": bool(domain)}
+
+@app.post("/api/subscription-domain")
+async def api_set_subscription_domain(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    clean = clean_cdn_domain(body.get("domain") or "")
+    sub = CONFIG.setdefault("subscription", {})
+    sub["domain"] = clean
+    if "redirect" in body:
+        sub["redirect"] = bool(body["redirect"])
+    await save_state()
+    if clean:
+        log_activity("settings", f"انتقال خودکار لینک‌های ساب به پنل جدید فعال شد: {clean}", "ok")
+    else:
+        log_activity("settings", "انتقال خودکار لینک‌های ساب غیرفعال شد", "warn")
+    return {"ok": True, "domain": clean, "redirect": bool(sub.get("redirect", True)), "active": bool(clean)}
+
+@app.delete("/api/subscription-domain")
+async def api_clear_subscription_domain(_=Depends(require_auth)):
+    CONFIG.setdefault("subscription", {})["domain"] = ""
+    await save_state()
+    log_activity("settings", "دامنه پنل جدید برای ساب‌ها حذف شد", "warn")
+    return {"ok": True, "domain": "", "active": False}
 
 # ── CDN Custom Domain (از Nyx Panel) ─────────────────────────────────────────
 @app.get("/api/cdn-domain")
@@ -2593,6 +2973,9 @@ async def http_proxy(target_url: str, request: Request):
 # ── Public sub page ───────────────────────────────────────────────────────────
 @app.get("/p/{uuid_key}", response_class=HTMLResponse)
 async def public_sub_page(uuid_key: str, request: Request):
+    redir = maybe_redirect_to_subscription_domain(request)
+    if redir:
+        return redir
     from pages import get_public_page_html
     async with SUBS_LOCK:
         sub = next(({"sub_id": sid, **s} for sid, s in SUBS.items() if s.get("uuid_key") == uuid_key), None)
@@ -2602,6 +2985,9 @@ async def public_sub_page(uuid_key: str, request: Request):
 
 @app.get("/api/public/sub/{uuid_key}")
 async def public_sub_data(uuid_key: str, request: Request):
+    redir = maybe_redirect_to_subscription_domain(request)
+    if redir:
+        return redir
     async with SUBS_LOCK:
         sub_entry = next(((sid, s) for sid, s in SUBS.items() if s.get("uuid_key") == uuid_key), None)
     if not sub_entry:

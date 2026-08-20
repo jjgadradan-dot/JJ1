@@ -30,10 +30,14 @@ from main import (
     NODE_API,
     SUBS,
     SUBS_LOCK,
+    activity_logs,
+    error_logs,
     fmt_bytes,
+    hourly_traffic,
     log_activity,
     logger,
     save_state,
+    stats,
 )
 
 BACKUP_VERSION = 1
@@ -82,12 +86,22 @@ async def build_backup() -> tuple[bytes, dict]:
         "node_api": dict(NODE_API),
         "master": dict(MASTER),
         "password_hash": AUTH.get("password_hash"),
+        "secret": CONFIG.get("secret", ""),
         "cdn_domain": CONFIG.get("cdn_domain", ""),
         "auto_failover": dict(CONFIG.get("auto_failover", {})),
         "multipath": dict(CONFIG.get("multipath", {})),
         "branding": dict(CONFIG.get("branding", {})),
         "warp": dict(CONFIG.get("warp", {})),
         "backup": dict(CONFIG.get("backup", {})),
+        "subscription": dict(CONFIG.get("subscription", {})),
+        "stats": {
+            "total_bytes": stats.get("total_bytes", 0),
+            "total_requests": stats.get("total_requests", 0),
+            "total_errors": stats.get("total_errors", 0),
+        },
+        "hourly_traffic": dict(hourly_traffic),
+        "activity_logs": list(activity_logs),
+        "error_logs": list(error_logs),
     }
     body_bytes = json.dumps(body, ensure_ascii=False, sort_keys=True).encode("utf-8")
     checksum = compute_checksum(body_bytes)
@@ -167,14 +181,38 @@ async def restore_backup(raw: bytes, keep_password: bool = False) -> dict:
     if body.get("master"):
         MASTER.update(body["master"])
 
+    if body.get("secret") and not os.environ.get("SECRET_KEY"):
+        CONFIG["secret"] = str(body.get("secret") or "")
+
     if not keep_password and body.get("password_hash"):
         AUTH["password_hash"] = body["password_hash"]
 
     if "cdn_domain" in body:
         CONFIG["cdn_domain"] = str(body.get("cdn_domain") or "").strip()
-    for key in ("auto_failover", "multipath", "branding", "warp", "backup"):
+    for key in ("auto_failover", "multipath", "branding", "warp", "backup", "subscription"):
         if isinstance(body.get(key), dict):
             CONFIG.setdefault(key, {}).update(body[key])
+
+    st = body.get("stats")
+    if isinstance(st, dict):
+        for key in ("total_bytes", "total_requests", "total_errors"):
+            try:
+                stats[key] = int(st.get(key, stats.get(key, 0)) or 0)
+            except (TypeError, ValueError):
+                pass
+    hourly_traffic.clear()
+    for k, v in (body.get("hourly_traffic") or {}).items():
+        try:
+            hourly_traffic[k] = int(v or 0)
+        except (TypeError, ValueError):
+            continue
+    activity_logs.clear()
+    for item in (body.get("activity_logs") or [])[-activity_logs.maxlen:]:
+        if isinstance(item, dict):
+            activity_logs.append(item)
+    error_logs.clear()
+    for item in (body.get("error_logs") or [])[-error_logs.maxlen:]:
+        error_logs.append(item)
 
     await save_state()
 

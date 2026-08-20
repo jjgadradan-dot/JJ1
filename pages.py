@@ -1617,7 +1617,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-versions"></i></div><div class="srv-tile-text"><div class="srv-tile-label">نسخه</div><div class="srv-tile-val">v__VERSION__</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-brand-fastapi"></i></div><div class="srv-tile-text"><div class="srv-tile-label">فریم‌ورک</div><div class="srv-tile-val">FastAPI + Uvicorn</div></div></div>
         <div class="srv-tile"><div class="srv-tile-icon"><i class="ti ti-cloud"></i></div><div class="srv-tile-text"><div class="srv-tile-label">پلتفرم</div><div class="srv-tile-val">Railway</div></div></div>
-        <div class="srv-tile" style="grid-column:1/-1"><div class="srv-tile-icon"><i class="ti ti-device-floppy"></i></div><div class="srv-tile-text"><div class="srv-tile-label">ذخیره‌سازی</div><div class="srv-tile-val">JSON File (/data)</div></div></div>
+        <div class="srv-tile" style="grid-column:1/-1"><div class="srv-tile-icon"><i class="ti ti-device-floppy"></i></div><div class="srv-tile-text"><div class="srv-tile-label">ذخیره‌سازی</div><div class="srv-tile-val">JSON File (/data) + Cloudflare KV</div></div></div>
       </div>
     </div>
     <div class="pw-panel">
@@ -1655,6 +1655,63 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         </div>
         <button class="pw-submit" onclick="changePw()"><i class="ti ti-shield-check"></i> ذخیره رمز جدید</button>
       </div>
+    </div>
+  </div>
+  <div class="pw-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-cloud-data-connection"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">☁️ ذخیره‌سازی Cloudflare KV <span class="cdn-badge" id="kv-badge">در حال بررسی...</span></div>
+        <div class="pw-hero-sub">مشخصات KV را اینجا ثبت کنید؛ روی پنل جدید دکمه «دریافت از KV» را بزنید تا همه کانفیگ‌ها، گروه‌ها، نودها، تنظیمات، رمز و آمار بالا بیاید.</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="af-grid">
+        <div class="af-tile"><div class="af-tile-label">وضعیت</div><div class="af-tile-val" id="kv-state">—</div></div>
+        <div class="af-tile"><div class="af-tile-label">کانفیگ‌ها</div><div class="af-tile-val" id="kv-links">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">گروه‌ها</div><div class="af-tile-val" id="kv-subs">۰</div></div>
+        <div class="af-tile"><div class="af-tile-label">کلید KV</div><div class="af-tile-val" id="kv-key-view">—</div></div>
+      </div>
+      <div class="g2">
+        <div class="pw-field"><label>Cloudflare Account ID</label><input class="pw-input" id="kv-account" dir="ltr" placeholder="Account ID" style="padding-right:14px"></div>
+        <div class="pw-field"><label>KV Namespace ID</label><input class="pw-input" id="kv-namespace" dir="ltr" placeholder="Namespace ID" style="padding-right:14px"></div>
+      </div>
+      <div class="g2">
+        <div class="pw-field"><label>API Token کلادفلر</label><input class="pw-input" id="kv-token" type="password" dir="ltr" autocomplete="off" placeholder="برای تغییر، توکن جدید را وارد کنید" style="padding-right:14px"></div>
+        <div class="pw-field"><label>نام کلید داخل KV</label><input class="pw-input" id="kv-key" dir="ltr" placeholder="x4g_state.json" style="padding-right:14px"></div>
+      </div>
+      <div class="sw-row"><span>همگام‌سازی Cloudflare KV فعال باشد</span><label class="sw"><input type="checkbox" id="kv-enabled" checked><i></i></label></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="pw-submit" style="flex:1;min-width:150px;background:linear-gradient(135deg,#F97316,#8B5CF6)" onclick="saveKvConfig()"><i class="ti ti-device-floppy"></i> ثبت مشخصات KV</button>
+        <button class="pw-submit" style="flex:1;min-width:150px;background:linear-gradient(135deg,#38BDF8,#22C55E)" onclick="pullKvState()"><i class="ti ti-cloud-download"></i> دریافت از KV برای این پنل</button>
+        <button class="cdn-reset" onclick="syncKvState()"><i class="ti ti-cloud-upload"></i> ارسال وضعیت فعلی به KV</button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>برای انتقال به پنل جدید: همین اطلاعات KV را در پنل جدید وارد کنید و اول <b>دریافت از KV</b> را بزنید. دکمه <b>ارسال وضعیت فعلی به KV</b> وضعیت همین پنل را منبع اصلی می‌کند.</span></div>
+    </div>
+  </div>
+  <div class="pw-panel" style="margin-top:18px">
+    <div class="pw-hero">
+      <div class="pw-hero-icon"><i class="ti ti-arrows-transfer-up"></i></div>
+      <div class="pw-hero-text">
+        <div class="pw-hero-title">🔁 انتقال خودکار لینک ساب مشتری به پنل جدید <span class="cdn-badge" id="sd-badge">غیرفعال</span></div>
+        <div class="pw-hero-sub">دامنه پنل جدید را اینجا بگذارید؛ لینک‌های ساب قدیمی با ریدایرکت ۳۰۷ به پنل جدید منتقل می‌شوند و لینک‌های جدید هم با همان دامنه ساخته می‌شوند.</div>
+      </div>
+    </div>
+    <div class="pw-body">
+      <div class="pw-field" style="margin-bottom:6px">
+        <label>دامنه پنل جدید / دامنه اصلی ساب</label>
+        <input class="pw-input" type="text" id="sd-inp" dir="ltr" placeholder="مثلاً: new-panel.example.com" style="padding-right:14px">
+      </div>
+      <div class="sw-row"><span>ریدایرکت خودکار لینک‌های قدیمی فعال باشد</span><label class="sw"><input type="checkbox" id="sd-redirect" checked><i></i></label></div>
+      <div class="cdn-active-row" id="sd-active-row" style="display:none">
+        <i class="ti ti-link"></i>
+        <span>ساب‌های مشتری به این پنل منتقل می‌شوند: <b id="sd-active-host">—</b></span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pw-submit" style="flex:1;min-width:180px;background:linear-gradient(135deg,#8B5CF6,#38BDF8)" onclick="saveSubDomain()"><i class="ti ti-device-floppy"></i> فعال‌سازی انتقال</button>
+        <button class="cdn-reset" id="sd-reset-btn" style="display:none" onclick="clearSubDomain()"><i class="ti ti-link-off"></i> حذف</button>
+      </div>
+      <div class="cdn-hint"><i class="ti ti-info-circle"></i><span>برای اینکه لینک‌های قدیمی کاربرها بدون تغییر دستی آپدیت شوند، دامنه قدیمی باید هنوز به یک پنل فعال جواب بدهد یا DNS/Cloudflare آن دامنه به پنل جدید اشاره کند. اگر پنل قدیمی خاموش شود و دامنه قدیمی هم جایی پاسخ ندهد، هیچ برنامه‌ای نمی‌تواند ساب قدیمی را آپدیت کند.</span></div>
     </div>
   </div>
   <div class="pw-panel cdn-panel" style="margin-top:18px">
@@ -2718,7 +2775,7 @@ async function fetchDefaultVless(){
 }
 function cpText(id){navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>toast('کپی شد ✓','ok'))}
 function qrFor(id){showQR(document.getElementById(id).textContent)}
-function refreshAll(){fetchStats();fetchDefaultVless();loadLinks();if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();if(document.getElementById('pg-subscriptions').classList.contains('on'))loadSubsPage();if(document.getElementById('pg-nodes').classList.contains('on'))loadNodes();if(document.getElementById('pg-master').classList.contains('on'))loadMasterPage();if(document.getElementById('pg-connections').classList.contains('on'))loadConns();if(document.getElementById('pg-logs').classList.contains('on'))loadActivity();toast('رفرش شد','ok')}
+function refreshAll(){fetchStats();fetchDefaultVless();loadLinks();if(document.getElementById('pg-settings').classList.contains('on')){loadKvStorage();loadSubDomain();}if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();if(document.getElementById('pg-subscriptions').classList.contains('on'))loadSubsPage();if(document.getElementById('pg-nodes').classList.contains('on'))loadNodes();if(document.getElementById('pg-master').classList.contains('on'))loadMasterPage();if(document.getElementById('pg-connections').classList.contains('on'))loadConns();if(document.getElementById('pg-logs').classList.contains('on'))loadActivity();toast('رفرش شد','ok')}
 async function changePw(){
   const cur=document.getElementById('cp-cur').value,nw=document.getElementById('cp-new').value,cf=document.getElementById('cp-cf').value;
   if(!cur||!nw||!cf){toast('همه فیلدها را پر کنید','err');return}
@@ -2731,6 +2788,89 @@ async function changePw(){
     toast('رمز تغییر کرد ✓','ok');
     ['cp-cur','cp-new','cp-cf'].forEach(id=>document.getElementById(id).value='');
   }catch(e){toast('✗ '+e.message,'err')}
+}
+async function loadKvStorage(){
+  try{
+    const r=await authF('/api/storage/status');const d=await r.json();const kv=d.cloudflare_kv||{};
+    const badge=document.getElementById('kv-badge');if(!badge)return;
+    const ok=kv.configured&&!kv.write_suspended;
+    badge.textContent=ok?'متصل ✓':(kv.configured?'نیاز به بررسی':'تنظیم نشده');
+    badge.className='cdn-badge '+(ok?'on':'');
+    document.getElementById('kv-state').textContent=kv.configured?(kv.write_suspended?'تعلیق نوشتن':'آماده'):'ناقص';
+    document.getElementById('kv-links').textContent=toFa(d.links_count||0);
+    document.getElementById('kv-subs').textContent=toFa(d.subs_count||0);
+    document.getElementById('kv-key-view').textContent=kv.key||'—';
+    document.getElementById('kv-enabled').checked=kv.enabled!==false;
+    if(kv.key)document.getElementById('kv-key').value=kv.key;
+    document.getElementById('kv-account').placeholder=kv.account_id||'Account ID';
+    document.getElementById('kv-namespace').placeholder=kv.namespace_id||'Namespace ID';
+    document.getElementById('kv-token').placeholder=kv.has_token?'توکن ذخیره شده — برای تغییر، مقدار جدید وارد کنید':'API Token';
+  }catch(e){console.error(e)}
+}
+async function saveKvConfig(){
+  const body={
+    enabled:document.getElementById('kv-enabled').checked,
+    account_id:document.getElementById('kv-account').value.trim(),
+    namespace_id:document.getElementById('kv-namespace').value.trim(),
+    api_token:document.getElementById('kv-token').value.trim(),
+    key:document.getElementById('kv-key').value.trim()||'x4g_state.json'
+  };
+  try{
+    const r=await authF('/api/storage/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'خطا');
+    ['kv-account','kv-namespace','kv-token'].forEach(id=>document.getElementById(id).value='');
+    toast('مشخصات KV ثبت شد ✓','ok');loadKvStorage();
+  }catch(e){toast('✗ '+e.message,'err')}
+}
+async function pullKvState(){
+  if(!confirm('اطلاعات این پنل با اطلاعات ذخیره‌شده در Cloudflare KV جایگزین شود؟'))return;
+  try{
+    const r=await authF('/api/storage/pull',{method:'POST'});const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا');
+    toast('اطلاعات از KV دریافت شد ✓','ok');loadKvStorage();refreshAll();
+  }catch(e){toast('✗ '+e.message,'err')}
+}
+async function syncKvState(){
+  if(!confirm('وضعیت فعلی همین پنل روی Cloudflare KV نوشته شود؟'))return;
+  try{
+    const r=await authF('/api/storage/sync',{method:'POST'});const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا');
+    toast('وضعیت فعلی به KV ارسال شد ✓','ok');loadKvStorage();
+  }catch(e){toast('✗ '+e.message,'err')}
+}
+async function loadSubDomain(){
+  try{
+    const r=await authF('/api/subscription-domain');const d=await r.json();
+    const host=d.domain||'';
+    const inp=document.getElementById('sd-inp');if(inp)inp.value=host;
+    const rd=document.getElementById('sd-redirect');if(rd)rd.checked=d.redirect!==false;
+    const badge=document.getElementById('sd-badge'),row=document.getElementById('sd-active-row'),reset=document.getElementById('sd-reset-btn');
+    if(!badge)return;
+    if(host){
+      badge.textContent=d.redirect?'ریدایرکت فعال 🔁':'دامنه جدید فعال';badge.className='cdn-badge on';
+      document.getElementById('sd-active-host').textContent=host;
+      row.style.display='flex';reset.style.display='inline-flex';
+    }else{
+      badge.textContent='غیرفعال';badge.className='cdn-badge';
+      row.style.display='none';reset.style.display='none';
+    }
+  }catch(e){console.error(e)}
+}
+async function saveSubDomain(){
+  const domain=document.getElementById('sd-inp').value.trim();
+  const redirect=document.getElementById('sd-redirect').checked;
+  try{
+    const r=await authF('/api/subscription-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,redirect})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'خطا');
+    toast(d.active?'انتقال ساب به پنل جدید فعال شد ✓':'انتقال ساب غیرفعال شد','ok');
+    loadSubDomain();fetchDefaultVless();loadLinks();loadSubs();
+  }catch(e){toast('✗ '+e.message,'err')}
+}
+async function clearSubDomain(){
+  try{
+    const r=await authF('/api/subscription-domain',{method:'DELETE'});if(!r.ok)throw new Error();
+    toast('انتقال خودکار ساب حذف شد','ok');loadSubDomain();fetchDefaultVless();loadLinks();loadSubs();
+  }catch(e){toast('خطا','err')}
 }
 async function loadCdnDomain(){
   try{
@@ -3255,9 +3395,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
   initCharts();
   document.getElementById('set-host').textContent=location.host;
   document.getElementById('sub-all-url')&&(document.getElementById('sub-all-url').textContent=location.protocol+'//'+location.host+'/sub-all');
-  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadCdnDomain();loadAutoFailover();loadMultiPath();loadBranding();loadBackup();loadWarp();
+  fetchStats();fetchDefaultVless();loadLinks();loadSubs();loadNodes();loadMasterPage();loadKvStorage();loadSubDomain();loadCdnDomain();loadAutoFailover();loadMultiPath();loadBranding();loadBackup();loadWarp();
   setInterval(fetchStats,4000);
-  setInterval(()=>{const ps=document.getElementById('pg-settings'),pm=document.getElementById('pg-monitor');const psOn=ps&&ps.classList.contains('on'),pmOn=pm&&pm.classList.contains('on');if(pmOn)loadMultiPath();if(psOn){loadBackup();loadWarp();}},8000);
+  setInterval(()=>{const ps=document.getElementById('pg-settings'),pm=document.getElementById('pg-monitor');const psOn=ps&&ps.classList.contains('on'),pmOn=pm&&pm.classList.contains('on');if(pmOn)loadMultiPath();if(psOn){loadKvStorage();loadSubDomain();loadBackup();loadWarp();}},8000);
   setInterval(()=>{
     if(document.getElementById('pg-links').classList.contains('on'))loadLinks();
     if(document.getElementById('pg-subgroups').classList.contains('on'))loadSubs();
