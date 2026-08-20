@@ -411,6 +411,28 @@ a{color:inherit;text-decoration:none}
 .tg-new{background:rgba(59,130,246,.15);color:var(--accent2)}
 .tg-imp{background:rgba(168,85,247,.15);color:#a855f7}
 .tg-fix{background:rgba(245,158,11,.15);color:#f59e0b}
+/* ══════ پیشنهادها و نقشه راه (برای بهتر شدن پنل) ══════ */
+.sug-panel{background:linear-gradient(155deg,var(--bg3) 0%,var(--card) 65%);border:1px solid rgba(16,185,129,.25);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:18px;position:relative}
+.sug-panel::before{content:'';position:absolute;top:-60px;left:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(16,185,129,.12),transparent 70%);pointer-events:none}
+.sug-head{display:flex;align-items:center;gap:14px;padding:20px 22px 16px;position:relative;z-index:1;border-bottom:1px solid var(--card-b)}
+.sug-head-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--green),#0D9668);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 6px 18px rgba(16,185,129,.35)}
+.sug-head-title{font-size:15px;font-weight:800;color:var(--t1)}
+.sug-head-sub{font-size:11.5px;color:var(--t3);margin-top:3px}
+.sug-body{padding:18px 22px 22px;position:relative;z-index:1}
+.sug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sug-card{background:rgba(0,0,0,.16);border:1px solid var(--card-b);border-radius:14px;padding:14px 15px;transition:.18s;position:relative;overflow:hidden}
+[data-theme="light"] .sug-card{background:rgba(5,150,105,.04)}
+.sug-card:hover{border-color:rgba(16,185,129,.4);transform:translateY(-2px);box-shadow:var(--shadow)}
+.sug-card::after{content:'';position:absolute;top:0;right:0;width:3px;height:100%;background:var(--green);opacity:0;transition:.18s}
+.sug-card:hover::after{opacity:1}
+.sug-card-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sug-card-icon{width:30px;height:30px;border-radius:9px;background:var(--green-bg);color:var(--green-t);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.sug-card-title{font-size:12.5px;font-weight:800;color:var(--t1)}
+.sug-card-desc{font-size:10.5px;color:var(--t3);line-height:1.8}
+.sug-tag{font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:20px;margin-right:auto;white-space:nowrap}
+.sug-tag.now{background:var(--green-bg);color:var(--green-t)}
+.sug-tag.soon{background:var(--amber-bg);color:var(--amber-t)}
+.sug-tag.idea{background:var(--purple-bg);color:#A78BFA}
 .pw-panel{background:linear-gradient(155deg,var(--bg3) 0%,var(--card) 60%);border:1px solid var(--card-b);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);position:relative}
 .pw-panel::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,var(--purple-bg),transparent 70%);pointer-events:none}
 .pw-hero{display:flex;align-items:center;gap:14px;padding:22px 24px 18px;position:relative;z-index:1}
@@ -769,6 +791,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
 .pc-xhttp{background:var(--purple-bg);color:#A78BFA}
 .pc-ultra{background:var(--green-bg);color:var(--green-t)}
 .pc-trojan{background:var(--red-bg);color:var(--red-t)}
+.pc-vmess{background:rgba(56,189,248,.14);color:#38bdf8}
 .cfg-sub-tag{font-size:9.5px;color:var(--t3);display:flex;align-items:center;gap:4px;white-space:nowrap}
 .cfg-sub-tag i{color:var(--purple);font-size:11px}
 .tog{width:19px;height:30px;border-radius:19px;background:rgba(100,116,139,0.25);position:relative;cursor:pointer;transition:.2s;flex-shrink:0;border:none}
@@ -922,6 +945,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
           <option value="xhttp-packet-up">XHTTP Ultra · packet-up</option>
           <option value="xhttp-stream-up">XHTTP Ultra · stream-up</option>
           <option value="trojan-ws">Trojan / WebSocket</option>
+          <option value="vmess-ws">VMess / WebSocket (AEAD)</option>
         </select>
       </div>
       <div class="fg" style="flex:1"><label>پکت فرگمنت</label>
@@ -1166,6 +1190,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
           <option value="xhttp-packet-up">XHTTP Ultra · packet-up</option>
           <option value="xhttp-stream-up">XHTTP Ultra · stream-up</option>
           <option value="trojan-ws">Trojan / WebSocket</option>
+          <option value="vmess-ws">VMess / WebSocket (AEAD)</option>
         </select>
         <div class="proto-cards">
           <div class="proto-card active" data-val="vless-ws" onclick="selectProto('vless-ws',this)">
@@ -1191,6 +1216,12 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
             <div class="proto-card-icon"><i class="ti ti-shield-lock"></i></div>
             <div class="proto-card-title">Trojan · WS</div>
             <div class="proto-card-desc">رمز = UUID کانفیگ</div>
+          </div>
+          <div class="proto-card" data-val="vmess-ws" onclick="selectProto('vmess-ws',this)">
+            <div class="proto-card-check"><i class="ti ti-check"></i></div>
+            <div class="proto-card-icon"><i class="ti ti-key"></i></div>
+            <div class="proto-card-title">VMess · WS</div>
+            <div class="proto-card-desc">AEAD · سازگار با v2rayNG</div>
           </div>
         </div>
       </div>
@@ -1276,7 +1307,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
         </div>
       </div>
       <div class="cp-footer">
-        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · لینک ساب مشتری سه پروتکل جدا (VLESS-WS، XHTTP، Trojan) می‌سازد · پروتکل انتخابی شما ردیف اول است.</div>
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · لینک ساب مشتری چند پروتکل جدا (VLESS-WS، XHTTP، Trojan، VMess) می‌سازد · پروتکل انتخابی شما ردیف اول است.</div>
         <button class="cp-submit-btn" onclick="createLink()"><i class="ti ti-link-plus"></i> ساخت کانفیگ</button>
       </div>
     </div>
@@ -1391,7 +1422,7 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
   <div class="g2">
     <div class="card">
       <div class="card-title"><i class="ti ti-rss"></i> سابسکریپشن تکی (هر کانفیگ)</div>
-      <p style="font-size:11.5px;color:var(--t3);line-height:1.8;margin-bottom:12px">هر کانفیگ URL سابسکریپشن مخصوص دارد. از کارت کانفیگ روی آیکون <i class="ti ti-rss"></i> کلیک کنید. در ساب مشتری سه پروتکل جدا (VLESS-WS، XHTTP، Trojan) می‌آید، بعد حجم و زمان، بعد لوکیشن. نوار حجم هم در v2rayNG، Hiddify، Streisand و Clash نمایش داده می‌شود.</p>
+      <p style="font-size:11.5px;color:var(--t3);line-height:1.8;margin-bottom:12px">هر کانفیگ URL سابسکریپشن مخصوص دارد. از کارت کانفیگ روی آیکون <i class="ti ti-rss"></i> کلیک کنید. در ساب مشتری چند پروتکل جدا (VLESS-WS، XHTTP، Trojan، VMess) می‌آید، بعد حجم و زمان، بعد لوکیشن. نوار حجم هم در v2rayNG، Hiddify، Streisand و Clash نمایش داده می‌شود.</p>
     </div>
     <div class="card">
       <div class="card-title"><i class="ti ti-database"></i> سابسکریپشن کامل (ادمین)</div>
@@ -1548,6 +1579,18 @@ background:rgba(249,115,22,.14);color:#fb923c;direction:ltr;font-family:ui-monos
     <button class="chg-fil" data-f="new">جدید</button>
     <button class="chg-fil" data-f="imp">بهبود</button>
     <button class="chg-fil" data-f="fix">رفع اشکال</button>
+  </div>
+  <div class="sug-panel">
+    <div class="sug-head">
+      <div class="sug-head-icon"><i class="ti ti-bulb"></i></div>
+      <div class="sug-head-text">
+        <div class="sug-head-title">پیشنهادها و نقشه راه</div>
+        <div class="sug-head-sub">ایده‌های عملی برای بهتر کردن پنل — هر پیشنهاد را می‌توانید در نسخه‌های بعد اجرا کنید</div>
+      </div>
+    </div>
+    <div class="sug-body">
+      <div class="sug-grid" id="sug-grid"></div>
+    </div>
   </div>
   <div class="chg-tl" id="chg-tl"></div>
 </section>
@@ -1869,7 +1912,7 @@ function expChip(exp,expired){
   return `<span class="exp-chip ec-ok"><i class="ti ti-calendar-check"></i> ${toFa(d)} روز مانده</span>`;
 }
 function protoBadge(p){
-  const m={'vless-ws':['VLESS · WS','pc-ws'],'xhttp-packet-up':['XHTTP · packet-up','pc-xhttp'],'xhttp-stream-up':['XHTTP · stream-up','pc-xhttp'],'xhttp-stream-one':['XHTTP ULTRA','pc-ultra'],'trojan-ws':['Trojan · WS','pc-trojan']};
+  const m={'vless-ws':['VLESS · WS','pc-ws'],'xhttp-packet-up':['XHTTP · packet-up','pc-xhttp'],'xhttp-stream-up':['XHTTP · stream-up','pc-xhttp'],'xhttp-stream-one':['XHTTP ULTRA','pc-ultra'],'trojan-ws':['Trojan · WS','pc-trojan'],'vmess-ws':['VMess · WS','pc-vmess']};
   const v=m[p]||m['vless-ws'];
   return `<span class="proto-chip ${v[1]}">${v[0]}</span>`;
 }
@@ -1953,13 +1996,19 @@ overlay.addEventListener('click',closeSb);
 function navTo(name){
   document.querySelectorAll('.nav-it').forEach(n=>n.classList.toggle('on',n.dataset.pg===name));
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==='pg-'+name));
-  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:renderChangelog,monitor:loadMultiPath};
+  const loaders={links:loadLinks,connections:loadConns,errors:loadErrs,subscriptions:loadSubsPage,subgroups:loadSubs,nodes:loadNodes,master:loadMasterPage,logs:loadActivity,changelog:()=>{renderChangelog();renderSuggestions();},monitor:loadMultiPath};
   if(loaders[name])loaders[name]();
   closeSb();window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('.nav-it').forEach(el=>el.addEventListener('click',()=>navTo(el.dataset.pg)));
 /* ===== تغییرات پنل (Changelog) ===== */
 const CHANGELOG=[
+  {v:'v9.18',date:'۱۴۰۵/۰۵',title:'پروتکل VMess، بخش پیشنهادها و رلهٔ سریع‌تر',items:[
+    {t:'new',x:'پروتکل VMess روی WebSocket با احراز هویت AEAD (AES-128-GCM / ChaCha20-Poly1305) — سازگار کامل با v2rayNG، Hiddify و NekoBox'},
+    {t:'new',x:'لینک ساب مشتری حالا چهار پروتکل جدا (VLESS-WS، XHTTP، Trojan، VMess) می‌سازد تا اگر یکی فیلتر شد بقیه وصل شوند'},
+    {t:'new',x:'بخش «پیشنهادها و نقشه راه» در صفحه تغییرات: ایده‌های عملی برای بهتر کردن پنل'},
+    {t:'imp',x:'رلهٔ سریع‌تر: بافر خواندن ۲ مگابایتی (جلوگیری از backpressure)، بافر سوکت ۴ مگابایتی و بافر رله ۵۱۲ کیلوبایتی'},
+  ]},
   {v:'v9.17',date:'۱۴۰۵/۰۵',title:'سه پروتکل روی یک ساب مشتری',items:[
     {t:'new',x:'هر لینک ساب مشتری سه کانفیگ جدا می‌سازد: VLESS-WS، XHTTP و Trojan — همه روی همان UUID و همان حجم/زمان'},
     {t:'new',x:'اگر یکی از پروتکل‌ها فیلتر شود، مشتری از لیست ساب پروتکل دیگر را وصل می‌کند'},
@@ -2116,6 +2165,32 @@ document.querySelectorAll('#chg-filters .chg-fil').forEach(b=>b.addEventListener
   document.querySelectorAll('#chg-filters .chg-fil').forEach(x=>x.classList.toggle('on',x===b));
   renderChangelog();
 }));
+/* ===== پیشنهادها و نقشه راه (برای بهتر شدن پنل) ===== */
+const SUGGESTIONS=[
+  {icon:'ti-lock-access',title:'احراز هویت دو مرحله‌ای (2FA)',desc:'رمز عبور + کد یک‌بارمصرف (TOTP) برای ورود ادمین؛ امنیت پنل را چند برابر می‌کند.',tag:'now'},
+  {icon:'ti-users-group',title:'چند ادمین با سطح دسترسی',desc:'تعریف ادمین‌های فرعی با دسترسی محدود (فقط مشاهده، فقط ساخت کانفیگ و...).',tag:'soon'},
+  {icon:'ti-network',title:'پشتیبانی گواهی TLS اختصاصی',desc:'بارگذاری گواهی خود امضا / Let\'s Encrypt برای دامنه اختصاصی، بدون نیاز به CDN.',tag:'soon'},
+  {icon:'ti-chart-dots',title:'گزارش مصرف هر کاربر (خروجی CSV)',desc:'دانلود مصرف روزانه/هفتگی هر کانفیگ برای صدور صورت‌حساب.',tag:'idea'},
+  {icon:'ti-bolt',title:'پروتکل‌های بیشتر',desc:'Shadowsocks و gRPC (با Xray جانبی) برای سازگاری با کلاینت‌های بیشتر.',tag:'idea'},
+  {icon:'ti-device-floppy',title:'فروش خودکار اشتراک',desc:'اتصال به درگاه پرداخت و صدور خودکار کانفیگ بعد از خرید (ربات تلگرام + وب).',tag:'idea'},
+  {icon:'ti-bell-ringing',title:'هشدار مصرف بالا',desc:'اعلان تلگرام وقتی مصرف کانفیگی به ۸۰٪ سهمیه رسید تا مشتری زودتر تمدید کند.',tag:'soon'},
+  {icon:'ti-palette',title:'تم‌های بیشتر',desc:'پوسته‌های آماده (بنفش، قرمز، فیروزه‌ای) و قابلیت انتخاب تم از تنظیمات.',tag:'idea'},
+];
+function renderSuggestions(){
+  const box=document.getElementById('sug-grid');if(!box)return;
+  const tagMeta={now:['انجام شده','now'],soon:['به‌زودی','soon'],idea:['ایده','idea']};
+  box.innerHTML=SUGGESTIONS.map(s=>{
+    const t=tagMeta[s.tag]||tagMeta.idea;
+    return `<div class="sug-card">
+      <div class="sug-card-top">
+        <div class="sug-card-icon"><i class="ti ${s.icon}"></i></div>
+        <div class="sug-card-title">${esc(s.title)}</div>
+        <span class="sug-tag ${t[1]}">${t[0]}</span>
+      </div>
+      <div class="sug-card-desc">${esc(s.desc)}</div>
+    </div>`;
+  }).join('');
+}
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 let prevTraf=0,ch1,ch2,ch3;
@@ -3367,6 +3442,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 .pc-xhttp{{background:var(--purple-bg);color:var(--purple-t)}}
 .pc-ultra{{background:var(--green-bg);color:var(--green-t)}}
 .pc-trojan{{background:var(--red-bg);color:var(--red-t)}}
+.pc-vmess{{background:rgba(56,189,248,.14);color:#38bdf8}}
 .cfg-status{{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap}}
 .cfg-status.ok{{background:var(--green-bg);color:var(--green-t)}}
 .cfg-status.no{{background:var(--red-bg);color:var(--red-t)}}
@@ -3511,6 +3587,7 @@ function toFa(n){{return String(n).replace(/\\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}
 function expiryLabel(value){{if(!value)return 'نامحدود';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleDateString('fa-IR')}}
 function protoChip(p){{
   if(p==='trojan-ws')return '<span class="proto-chip pc-trojan"><i class="ti ti-shield-lock"></i> Trojan · WS</span>';
+  if(p==='vmess-ws')return '<span class="proto-chip pc-vmess"><i class="ti ti-key"></i> VMess · WS</span>';
   if(p==='xhttp-stream-one')return '<span class="proto-chip pc-ultra"><i class="ti ti-bolt"></i> XHTTP ULTRA</span>';
   if(p&&p.startsWith('xhttp'))return '<span class="proto-chip pc-xhttp">'+esc(p)+'</span>';
   return '<span class="proto-chip pc-ws">VLESS · WS</span>';

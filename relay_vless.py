@@ -49,8 +49,9 @@ from speed_limit import throttle
 # VLESS Relay — بهینه‌شده برای حداکثر throughput
 # ══════════════════════════════════════════════════════════════════════════════
 
-RELAY_BUF = int(os.environ.get("RELAY_BUF", str(256 * 1024)))   # 256 KB buffer
-SOCK_BUF_SIZE = 2 * 1024 * 1024                                  # SO_SNDBUF / SO_RCVBUF
+RELAY_BUF = int(os.environ.get("RELAY_BUF", str(512 * 1024)))   # 512 KB buffer (قابل تنظیم)
+SOCK_BUF_SIZE = 4 * 1024 * 1024                                  # SO_SNDBUF / SO_RCVBUF
+READ_LIMIT = int(os.environ.get("READ_LIMIT", str(2 * 1024 * 1024)))  # سقف بافر خواندن (برای throughput بالا)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # حسابداری مصرف — بدون قفل، با فلاش دسته‌ای هر ۱ ثانیه
@@ -190,6 +191,10 @@ async def parse_vless_header(chunk: bytes):
     return command, address, port, chunk[pos:]
 
 async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: str, uid: str, speed_limited: bool = False):
+    # ⚡ کش مراجع محلی برای کاهش جستجوی dict/اتریبیوت در هر چانک
+    conn = connections[conn_id]
+    drain = writer.drain
+    wbuf = lambda: writer.transport.get_write_buffer_size()
     try:
         while True:
             msg = await ws.receive()
@@ -198,16 +203,17 @@ async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: 
             data = msg.get("bytes") or (msg.get("text") or "").encode()
             if not data:
                 continue
-            if not check_and_use(uid, len(data)):
+            n = len(data)
+            if not check_and_use(uid, n):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
             if speed_limited:
-                await throttle(uid, len(data))
+                await throttle(uid, n)
             stats["total_requests"] += 1
-            connections[conn_id]["bytes"] += len(data)
+            conn["bytes"] += n
             writer.write(data)
-            if writer.transport.get_write_buffer_size() > RELAY_BUF:
-                await writer.drain()
+            if wbuf() > RELAY_BUF:
+                await drain()
     except (WebSocketDisconnect, Exception):
         pass
     finally:
@@ -218,17 +224,19 @@ async def relay_ws_to_tcp(ws: WebSocket, writer: asyncio.StreamWriter, conn_id: 
 
 async def relay_tcp_to_ws(ws: WebSocket, reader: asyncio.StreamReader, conn_id: str, uid: str, speed_limited: bool = False):
     first = True
+    conn = connections[conn_id]
     try:
         while True:
             data = await reader.read(RELAY_BUF)
             if not data:
                 break
-            if not check_and_use(uid, len(data)):
+            n = len(data)
+            if not check_and_use(uid, n):
                 await ws.close(code=1008, reason="quota/disabled/unknown")
                 break
             if speed_limited:
-                await throttle(uid, len(data))
-            connections[conn_id]["bytes"] += len(data)
+                await throttle(uid, n)
+            conn["bytes"] += n
             payload = (b"\x00\x00" + data) if first else data
             first = False
             await ws.send_bytes(payload)

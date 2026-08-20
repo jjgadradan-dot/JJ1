@@ -39,7 +39,7 @@ REAPER_INTERVAL = 10
 TCP_CONNECT_TIMEOUT = 10.0
 
 # ── تنظیمات موتور تطبیقی ──────────────────────────────────────────────────────
-SOCK_BUF_SIZE = 2 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
+SOCK_BUF_SIZE = 4 * 1024 * 1024     # SO_SNDBUF / SO_RCVBUF
 
 # _AdaptiveFlow: بازه‌ی مجاز برای high-water تطبیقی (AIMD)
 FLOW_MIN_HW = 256 * 1024

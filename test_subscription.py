@@ -99,28 +99,33 @@ class SubscriptionUserinfoTests(unittest.TestCase):
         from protocols import customer_sub_protocols
         self.assertEqual(
             customer_sub_protocols("vless-ws"),
-            ["vless-ws", "xhttp-stream-one", "trojan-ws"],
+            ["vless-ws", "xhttp-stream-one", "trojan-ws", "vmess-ws"],
         )
         self.assertEqual(
             customer_sub_protocols("trojan-ws"),
-            ["trojan-ws", "vless-ws", "xhttp-stream-one"],
+            ["trojan-ws", "vless-ws", "xhttp-stream-one", "vmess-ws"],
         )
         self.assertEqual(
             customer_sub_protocols("xhttp-packet-up"),
-            ["xhttp-packet-up", "vless-ws", "trojan-ws"],
+            ["xhttp-packet-up", "vless-ws", "trojan-ws", "vmess-ws"],
         )
-        self.assertEqual(len(customer_sub_protocols("nope")), 3)
+        self.assertEqual(len(customer_sub_protocols("nope")), 4)
 
         link = {"label": "علی", "protocol": "vless-ws"}
         lines = main.share_links_for_customer(link, "11111111-2222-3333-4444-555555555555", "cdn.example.com")
-        self.assertEqual(len(lines), 3)
+        self.assertEqual(len(lines), 4)
         self.assertTrue(lines[0].startswith("vless://"))
         self.assertIn("type=xhttp", lines[1])
         self.assertTrue(lines[2].startswith("trojan://"))
+        self.assertTrue(lines[3].startswith("vmess://"))
         joined = unquote("\n".join(lines))
         self.assertIn("علی · VLESS-WS", joined)
         self.assertIn("علی · XHTTP", joined)
         self.assertIn("علی · Trojan", joined)
+        # remark در لینک VMess داخل base64/JSON است
+        import base64 as _b64, json as _json
+        vmess_ps = _json.loads(_b64.b64decode(lines[3][len("vmess://"):]).decode())["ps"]
+        self.assertIn("علی · VMess", vmess_ps)
 
     def test_unlimited_userinfo(self):
         link = {"used_bytes": 123, "limit_bytes": 0, "expires_at": None}
@@ -152,18 +157,24 @@ class SubscriptionUserinfoTests(unittest.TestCase):
         self.assertIn("کاربر علی", parts[0])
         self.assertNotIn("📦", parts[0])
         self.assertNotIn("🌐", parts[0])
-        # سه پروتکل واقعی از همان UUID، بعد ردیف حجم و لوکیشن
-        real = parts[:3]
+        # چهار پروتکل واقعی از همان UUID، بعد ردیف حجم و لوکیشن
+        real = parts[:4]
         self.assertTrue(any("type=ws" in p and p.startswith("vless://") for p in real))
         self.assertTrue(any("type=xhttp" in p for p in real))
         self.assertTrue(any(p.startswith("trojan://") for p in real))
+        self.assertTrue(any(p.startswith("vmess://") for p in real))
         for p in real:
-            self.assertIn("کاربر علی", p)
+            if p.startswith("vmess://"):
+                import base64 as _b64, json as _json
+                cfg = _json.loads(_b64.b64decode(p[len("vmess://"):]).decode())
+                self.assertIn("کاربر علی", cfg.get("ps", ""))
+            else:
+                self.assertIn("کاربر علی", p)
             self.assertNotIn("📦", p)
-        self.assertIn("📦 حجم", parts[3])
-        self.assertIn("📅 زمان", parts[3])
-        self.assertIn("🌐 لوکیشن", parts[4])
-        self.assertIn("آلمان", parts[4])
+        self.assertIn("📦 حجم", parts[4])
+        self.assertIn("📅 زمان", parts[4])
+        self.assertIn("🌐 لوکیشن", parts[5])
+        self.assertIn("آلمان", parts[5])
 
     def test_group_sub_aggregates_usage(self):
         a = self._make_link(label="سرور ۱", limit_value=5, expires_days=10)

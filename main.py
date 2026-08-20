@@ -234,10 +234,12 @@ from protocols import (
     PROTOCOL_LABELS,
     PROTOCOL_SHORT_LABELS,
     build_trojan_link,
+    build_vmess_link,
     customer_sub_protocols,
     fragment_query_value,
     fragment_summary_fa,
     is_trojan,
+    is_vmess,
     normalize_fragment,
     trojan_password,
 )
@@ -255,6 +257,7 @@ DEFAULT_ALPN_BY_PROTOCOL = {
     "xhttp-stream-up": "h2,http/1.1",
     "xhttp-stream-one": "h2,http/1.1",
     "trojan-ws": "http/1.1",
+    "vmess-ws": "http/1.1",
 }
 DEFAULT_PORT = 443
 MIN_PORT, MAX_PORT = 1, 65535
@@ -536,6 +539,13 @@ def generate_vless_link(
         return build_trojan_link(
             uuid, host, remark=remark, port=port_val, sni=sni_val,
             fingerprint=fp, alpn=alpn_val, fragment=fragment,
+        )
+
+    # 🔐 پروتکل VMess هم قالب لینک جداگانه‌ای دارد (base64 JSON)
+    if is_vmess(protocol):
+        return build_vmess_link(
+            uuid, host, remark=remark, port=port_val, sni=sni_val,
+            fingerprint=fp, alpn=alpn_val,
         )
 
     if protocol == "vless-ws":
@@ -2556,6 +2566,13 @@ app.add_api_websocket_route("/ws/{uuid}", websocket_tunnel)
 from relay_trojan import trojan_tunnel
 
 app.add_api_websocket_route("/trojan/{uuid}", trojan_tunnel)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔐 VMess Relay — رلهٔ واقعی پروتکل VMess (AEAD) روی WebSocket
+# ══════════════════════════════════════════════════════════════════════════════
+from relay_vmess import vmess_tunnel
+
+app.add_api_websocket_route("/vmess/{uuid}", vmess_tunnel)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # XHTTP — Siz10a XHTTP Ultra (ترابرد جدید، جدا از VLESS/WS، هر ۳ مد)

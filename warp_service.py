@@ -25,6 +25,10 @@ from datetime import datetime
 
 from main import CONFIG, IRAN_TZ, log_activity, logger
 
+# ⚡ سقف بافر خواندن جریان (پیش‌فرض asyncio=64KB). با مقدار بزرگ‌تر، backpressure
+# کمتر و throughput بیشتری روی لینک‌های پرسرعت/پرتاخیر به دست می‌آید.
+READ_LIMIT = int(os.environ.get("READ_LIMIT", str(2 * 1024 * 1024)))
+
 # ── دامنه‌هایی که به‌طور پیش‌فرض از WARP عبور داده می‌شوند ─────────────────────
 DEFAULT_WARP_DOMAINS = [
     "openai.com", "chatgpt.com", "oaistatic.com", "oaiusercontent.com",
@@ -109,7 +113,7 @@ def domain_matches(host: str, domains: list[str]) -> bool:
 async def _socks5_connect(proxy: dict, address: str, port: int, timeout: float):
     """دست‌دادن SOCKS5 (RFC 1928) و درخواست CONNECT به مقصد."""
     reader, writer = await asyncio.wait_for(
-        asyncio.open_connection(proxy["host"], proxy["port"]), timeout=timeout
+        asyncio.open_connection(proxy["host"], proxy["port"], limit=READ_LIMIT), timeout=timeout
     )
     try:
         use_auth = bool(proxy["user"])
@@ -162,7 +166,7 @@ async def _http_connect(proxy: dict, address: str, port: int, timeout: float):
     import base64
 
     reader, writer = await asyncio.wait_for(
-        asyncio.open_connection(proxy["host"], proxy["port"]), timeout=timeout
+        asyncio.open_connection(proxy["host"], proxy["port"], limit=READ_LIMIT), timeout=timeout
     )
     try:
         req = f"CONNECT {address}:{port} HTTP/1.1\r\nHost: {address}:{port}\r\n"
@@ -235,7 +239,7 @@ class WarpManager:
         if not self.should_use_warp(address):
             self.total_direct += 1
             return await asyncio.wait_for(
-                asyncio.open_connection(address, port), timeout=timeout
+                asyncio.open_connection(address, port, limit=READ_LIMIT), timeout=timeout
             ), False
 
         proxy = self.proxy
@@ -257,7 +261,7 @@ class WarpManager:
             self.recent.appendleft({"time": datetime.now(IRAN_TZ).isoformat(),
                                     "host": address, "via": "fallback"})
             return await asyncio.wait_for(
-                asyncio.open_connection(address, port), timeout=timeout
+                asyncio.open_connection(address, port, limit=READ_LIMIT), timeout=timeout
             ), False
 
     # ── تست سلامت ─────────────────────────────────────────────────────────────

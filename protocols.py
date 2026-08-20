@@ -19,8 +19,10 @@ from urllib.parse import quote
 VLESS_PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one")
 # پروتکل Trojan روی ترابرد WebSocket (رله‌ی واقعی در relay_trojan.py)
 TROJAN_PROTOCOLS = ("trojan-ws",)
+# پروتکل VMess روی ترابرد WebSocket (رله‌ی واقعی در relay_vmess.py — AEAD)
+VMESS_PROTOCOLS = ("vmess-ws",)
 
-ALL_PROTOCOLS = VLESS_PROTOCOLS + TROJAN_PROTOCOLS
+ALL_PROTOCOLS = VLESS_PROTOCOLS + TROJAN_PROTOCOLS + VMESS_PROTOCOLS
 
 PROTOCOL_LABELS = {
     "vless-ws": "VLESS + WebSocket",
@@ -28,33 +30,43 @@ PROTOCOL_LABELS = {
     "xhttp-stream-up": "VLESS + XHTTP (stream-up)",
     "xhttp-stream-one": "VLESS + XHTTP (stream-one)",
     "trojan-ws": "Trojan + WebSocket",
+    "vmess-ws": "VMess + WebSocket (AEAD)",
 }
 
-# اسم کوتاه داخل لیست v2rayNG تا سه پروتکل یک مشتری قاطی نشوند
+# اسم کوتاه داخل لیست v2rayNG تا پروتکل‌های یک مشتری قاطی نشوند
 PROTOCOL_SHORT_LABELS = {
     "vless-ws": "VLESS-WS",
     "xhttp-packet-up": "XHTTP-packet",
     "xhttp-stream-up": "XHTTP-stream",
     "xhttp-stream-one": "XHTTP",
     "trojan-ws": "Trojan",
+    "vmess-ws": "VMess",
 }
 
 
-def customer_sub_protocols(primary: str | None) -> list[str]:
-    """سه پروتکل جدا برای ساب مشتری از روی همان UUID.
+def is_trojan(protocol: str) -> bool:
+    return (protocol or "") in TROJAN_PROTOCOLS
 
-    ترتیب: پروتکل انتخاب‌شدهٔ ادمین اول، بعد دو خانوادهٔ دیگر
-    (VLESS-WS، یک مد XHTTP، Trojan) تا اگر یکی فیلتر شد بقیه وصل شوند.
+
+def is_vmess(protocol: str) -> bool:
+    return (protocol or "") in VMESS_PROTOCOLS
+
+
+def customer_sub_protocols(primary: str | None) -> list[str]:
+    """چند پروتکل جدا برای ساب مشتری از روی همان UUID.
+
+    ترتیب: پروتکل انتخاب‌شدهٔ ادمین اول، بعد بقیهٔ خانواده‌ها
+    (VLESS-WS، یک مد XHTTP، Trojan، VMess) تا اگر یکی فیلتر شد بقیه وصل شوند.
     """
     primary = (primary or "").strip().lower()
     if primary not in ALL_PROTOCOLS:
         primary = "vless-ws"
     xhttp = primary if primary.startswith("xhttp-") else "xhttp-stream-one"
     out: list[str] = []
-    for p in (primary, "vless-ws", xhttp, "trojan-ws"):
+    for p in (primary, "vless-ws", xhttp, "trojan-ws", "vmess-ws"):
         if p not in out:
             out.append(p)
-    return out[:3]
+    return out[:4]
 
 
 def is_trojan(protocol: str) -> bool:
@@ -223,3 +235,46 @@ def build_trojan_link(
         params["fragment"] = frag
     query = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     return f"trojan://{quote(trojan_password(uuid))}@{host}:{port}?{query}#{quote(remark)}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ساخت لینک اشتراک VMess
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_vmess_link(
+    uuid: str,
+    host: str,
+    remark: str = "",
+    port: int = 443,
+    sni: str = "",
+    fingerprint: str = "chrome",
+    alpn: str = "http/1.1",
+    fragment: dict | None = None,
+) -> str:
+    """لینک اشتراک استاندارد VMess روی ترابرد WebSocket.
+
+    قالب: vmess://base64(JSON). مسیر WS همان /vmess/{uuid} است که relay_vmess.py
+    سرو می‌کند. aid=0 و scy=auto یعنی احراز هویت AEAD (استاندارد کلاینت‌های مدرن).
+    """
+    import base64
+    import json as _json
+
+    config = {
+        "v": "2",
+        "ps": remark,
+        "add": host,
+        "port": str(port),
+        "id": uuid,
+        "aid": "0",
+        "scy": "auto",
+        "net": "ws",
+        "type": "none",
+        "host": host,
+        "path": f"/vmess/{uuid}",
+        "tls": "tls",
+        "sni": (sni or "").strip() or host,
+        "fp": (fingerprint or "chrome").strip() or "chrome",
+        "alpn": (alpn or "").strip() or "http/1.1",
+    }
+    payload = _json.dumps(config, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return "vmess://" + base64.b64encode(payload).decode("ascii")
